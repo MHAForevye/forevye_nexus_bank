@@ -1,0 +1,178 @@
+/* Forevye Nexus — banka arayüzü (ana sayfa, kartım, yer tutucu bölümler) ve yönlendirme. */
+(function (root) {
+  'use strict';
+  const R = root.FNXRules, X = root.FNXRender, T = root.FNXTemplates;
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = X.esc;
+
+  const store = {
+    get(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+  };
+
+  /* Sistem kaydı: kart numarası, güvenlik kodu, son kullanma. Bu sürümde yerel üretilir;
+     sunucu aşamasında Worker atar ve istemci hiçbir koşulda değiştiremez. Gerçek ödeme verisi değildir. */
+  function rnd(n) {
+    const a = new Uint8Array(n); (root.crypto || {}).getRandomValues ? root.crypto.getRandomValues(a) : a.forEach((_, i) => { a[i] = Math.random() * 256; });
+    return Array.from(a, v => v % 10).join('');
+  }
+  function systemRecord() {
+    let s = store.get('fnx.system', null);
+    if (!s || !s.cardNumber) {
+      const n = '9' + rnd(15), now = new Date();
+      s = {
+        cardNumber: n.replace(/(\d{4})(?=\d)/g, '$1 '), cvv: rnd(3), bankName: 'FOREVYE NEXUS', status: 'Aktif',
+        expiry: ('0' + (now.getMonth() + 1)).slice(-2) + '/' + String((now.getFullYear() + 5) % 100)
+      };
+      store.set('fnx.system', s);
+    }
+    return s;
+  }
+  function savedDesign() {
+    const d = store.get('fnx.design', null);
+    if (d) { const v = R.validateDesign(d); if (v.ok) return v.design; }
+    return T.get('classic');
+  }
+  function draftDesign(saved) {
+    const dr = store.get('fnx.draft', null);
+    if (!dr || !dr.design || !Array.isArray(dr.design.layers)) return null;
+    return JSON.stringify(dr.design) === JSON.stringify(saved) ? null : dr.design;
+  }
+
+  let toastTimer;
+  root.FNXToast = function (msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3400);
+  };
+
+  const fmt = n => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function titleCase(s) {
+    return String(s).toLocaleLowerCase('tr-TR').replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toLocaleUpperCase('tr-TR'));
+  }
+
+  /* ---------- sayfalar ---------- */
+  const BALANCE = 12450; // örnek değer; gerçek bakiye sunucuda işlem kaydıyla tutulacak
+  const TX = [
+    { t: 'Mağaza — Zırh paketi', a: -450, d: 'Bugün' },
+    { t: 'Görev ödülü', a: 1200, d: 'Dün' },
+    { t: 'Takas — eşya satışı', a: 320, d: '18 Kasım' },
+    { t: 'Mağaza — Efekt paketi', a: -180, d: '16 Kasım' }
+  ];
+
+  function cardBlock(design, sys, prefix) {
+    return `<div class="tilt" data-tilt>${X.cardSvg(design, sys, { prefix })}</div>`;
+  }
+
+  function renderHome(ctx) {
+    const name = titleCase(ctx.design.userDisplayName);
+    return `<header class="page-h"><h1>Hoş geldin, ${esc(name)}</h1><p class="muted">Sanal hesabın aktif.</p></header>
+    <div class="home-grid">
+      <section class="hero">
+        ${cardBlock(ctx.design, ctx.sys, 'd')}
+        <div class="row"><a class="btn primary" href="#/editor">Kartını tasarla</a><a class="btn" href="#/card">Kart bilgileri</a></div>
+      </section>
+      <section class="panel balance">
+        <p class="muted">Sanal bakiye</p>
+        <p class="amount">${fmt(BALANCE)} <span>NX</span></p>
+        <p class="note">Oyun içi bakiyedir; gerçek para veya banka mevduatı değildir.</p>
+        <div class="row"><button class="btn" type="button" disabled>Gönder · yakında</button><button class="btn" type="button" disabled>Mağaza · yakında</button></div>
+      </section>
+      <section class="panel tx">
+        <h2 class="panel-h">Son hareketler</h2>
+        <ul class="txlist">${TX.map(x => `<li><span><b>${esc(x.t)}</b><small>${x.d}</small></span><span class="${x.a < 0 ? 'neg' : 'pos'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))} NX</span></li>`).join('')}</ul>
+        <p class="note">Örnek veriler. Gerçek işlem kayıtları sanal ekonomi aşamasında sunucudan gelecek.</p>
+      </section>
+    </div>`;
+  }
+
+  function renderCardPage(ctx) {
+    const s = ctx.sys;
+    return `<header class="page-h"><h1>Kartım</h1><p class="muted">Görünümü sen tasarlarsın; kimlik bilgilerini sistem belirler.</p></header>
+    <div class="card-page">
+      <section class="hero">${cardBlock(ctx.design, s, 'd')}
+        <div class="row"><a class="btn primary" href="#/editor">Kartını tasarla</a></div></section>
+      <section class="panel details">
+        <h2 class="panel-h">Kart bilgileri</h2>
+        <dl>
+          <div><dt>Kart numarası</dt><dd><span id="d-num" class="mono" data-v="${esc(s.cardNumber)}">${esc(maskNum(s.cardNumber))}</span><button class="btn sm" type="button" data-reveal="num" aria-pressed="false">Göster</button></dd></div>
+          <div><dt>Son kullanma</dt><dd class="mono">${esc(s.expiry)}</dd></div>
+          <div><dt>Güvenlik kodu</dt><dd><span id="d-cvv" class="mono" data-v="${esc(s.cvv)}">•••</span><button class="btn sm" type="button" data-reveal="cvv" aria-pressed="false">Göster</button></dd></div>
+          <div><dt>Durum</dt><dd>${esc(s.status)}</dd></div>
+          <div><dt>Banka</dt><dd>${esc(s.bankName)}</dd></div>
+        </dl>
+        <p class="note">Bu alanlar sistem tarafından atanır ve kart editöründen değiştirilemez. Oyun içi temsili bilgilerdir; gerçek ödemede kullanılamaz.</p>
+      </section>
+    </div>`;
+  }
+  const maskNum = n => n.replace(/\d(?=.*\d{4}$)/g, '•');
+
+  function renderSoon(title, text) {
+    return `<header class="page-h"><h1>${title}</h1></header><section class="panel soon"><p>${text}</p><a class="btn" href="#/home">Ana sayfaya dön</a></section>`;
+  }
+
+  const PAGES = {
+    home: renderHome, card: renderCardPage,
+    activity: () => renderSoon('Hareketler', 'Bakiye ve satın alma hareketleri sanal ekonomi aşamasında burada listelenecek.'),
+    store: () => renderSoon('Mağaza', 'Oyun içi ürün kataloğu ve satın alma, sanal ekonomi aşamasında eklenecek.'),
+    settings: () => renderSoon('Ayarlar', 'Hesap, e-posta girişi ve güvenlik ayarları hesap aşamasında eklenecek.')
+  };
+
+  /* ---------- yönlendirme ---------- */
+  const ctx = { sys: null, design: null };
+  function route() {
+    const name = (location.hash || '#/home').replace(/^#\/?/, '').split('?')[0] || 'home';
+    const app = $('#view-app'), ed = $('#view-editor');
+    if (name === 'editor') {
+      const saved = savedDesign();
+      app.hidden = true; ed.hidden = false; document.body.classList.add('in-editor');
+      root.FNXEditor.open({
+        saved, draft: draftDesign(saved), system: ctx.sys,
+        onSave: d => { ctx.design = d; },
+        onExit: () => { location.hash = '#/home'; }
+      });
+      return;
+    }
+    root.FNXEditor.close();
+    ed.hidden = true; app.hidden = false; document.body.classList.remove('in-editor');
+    const key = PAGES[name] ? name : 'home';
+    ctx.design = savedDesign();
+    $('#page').innerHTML = PAGES[key](ctx);
+    document.querySelectorAll('[data-route]').forEach(a => {
+      if (a.dataset.route === key) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    document.title = (key === 'home' ? 'Ana sayfa' : key === 'card' ? 'Kartım' : $('#page h1').textContent) + ' · Forevye Nexus';
+    window.scrollTo(0, 0); bindPage();
+  }
+
+  function bindPage() {
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.querySelectorAll('[data-tilt]').forEach(t => {
+      if (reduce) return;
+      t.addEventListener('pointermove', e => {
+        if (e.pointerType === 'touch') return;
+        const r = t.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+        t.style.transform = `perspective(1000px) rotateY(${(x * 9).toFixed(2)}deg) rotateX(${(-y * 9).toFixed(2)}deg)`;
+      });
+      t.addEventListener('pointerleave', () => { t.style.transform = ''; });
+    });
+    document.querySelectorAll('[data-reveal]').forEach(b => {
+      let timer;
+      b.addEventListener('click', () => {
+        const k = b.dataset.reveal, span = $(k === 'num' ? '#d-num' : '#d-cvv');
+        const show = b.getAttribute('aria-pressed') !== 'true';
+        const hide = () => { span.textContent = k === 'num' ? maskNum(span.dataset.v) : '•••'; b.setAttribute('aria-pressed', 'false'); b.textContent = 'Göster'; };
+        clearTimeout(timer);
+        if (show) { span.textContent = span.dataset.v; b.setAttribute('aria-pressed', 'true'); b.textContent = 'Gizle'; timer = setTimeout(hide, 10000); }
+        else hide();
+      });
+    });
+  }
+
+  function start() {
+    ctx.sys = systemRecord();
+    $('#side-icon').innerHTML = X.iconSvg('');
+    window.addEventListener('hashchange', route);
+    route();
+  }
+  start();
+})(window);

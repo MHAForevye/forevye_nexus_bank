@@ -1,2 +1,70 @@
-# banka
-a
+# Forevye Nexus — Oyun İçi Sanal Banka
+
+Gerçek banka veya ödeme ağı değildir; oyun içi bakiye, profil ve alışveriş deneyimi için sanal banka arayüzü.
+Bu ilk sürümde **banka arayüzü** ve **kart oluşturma (editör) mekaniği** vardır. Ekonomi, hesap ve sunucu sonraki aşamalardır.
+
+Kaynak şartname: [`docs/kart-tasarim-sartnamesi-v1.pdf`](docs/kart-tasarim-sartnamesi-v1.pdf)
+
+## Çalıştırma
+
+Derleme adımı yok; düz HTML/CSS/JS.
+
+- **Yerelde:** `index.html` dosyasını doğrudan açabilirsin ya da klasörde `python3 -m http.server 8080` çalıştırıp `http://localhost:8080` adresine git.
+- **GitHub Pages:** depoyu GitHub'a yükle → *Settings → Pages → Deploy from a branch → main / (root)*. `.nojekyll` hazır.
+- **Cloudflare Pages:** build komutu boş, çıktı klasörü `/` olarak bağla.
+
+> Yazı tipi (Jost) Google Fonts'tan yüklenir; çevrimdışıyken sistem yazı tipine düşer.
+
+## Şu an neler var
+
+**Banka arayüzü:** Ana sayfa (kart, sanal bakiye, örnek hareketler), Kartım (numara / güvenlik kodu göster-gizle), Hareketler / Mağaza / Ayarlar için yer tutucular. Mobilde alt menü.
+
+**Kart editörü (`#/editor`):**
+- 4 şablon: Classic, Signature, Creative, Dağ (görseldeki dört kart)
+- 14 zemin (düz + gradient, 3 renge kadar, açı), 4 yüzey: Mat, Parlak, Metal folyo, Holografik
+- 14 şekil/desen, 3 çip görünümü, nesne efektleri: gölge, kabartma, buzlu cam
+- Sürükle, köşeden boyutlandır, üst noktadan döndür; merkez ve kenar boşluğu kılavuzları
+- X/Y/boyut/dönüş/opaklık/renk/çizgi/çevirme/oran koruma alanları
+- Katman paneli: sürükle-bırak sıralama, görünürlük, kilit, kopyala, sil, öne/arkaya
+- Geri al / yinele (Ctrl+Z / Ctrl+Y), otomatik taslak, önizleme, sıfırla, kaydet
+- Klavye: Delete, ok tuşları (Shift ile 10 birim), Ctrl+D, Esc
+
+## Koruma mantığı (şartname bölüm 2 ve 4)
+
+| Alan | Davranış |
+|---|---|
+| Banka adı + logo, çip, kart numarası/bilgileri | Editörde seçilemez; katman listesinde "sistem" olarak kilitli. Veri modelinde **yer almaz**, çizim anında sistem kaydından eklenir. |
+| Çip / logo / bilgi bölgeleri | `js/rules.js` içindeki `ZONES`. Küçük–orta nesne bölgeyle kesişirse bırakınca en yakın güvenli konuma itilir, olmazsa eski yerine döner. Katman sırası bunu aşamaz. |
+| Büyük nesneler (kartın %35'inden fazla) | Serbesttir, ancak çip ve logo bölgesi çizimde **kesilir**; üstünü örtemez. |
+| Kullanıcı adı | 2–18 karakter; harf, rakam, boşluk ve `. - _ '`. HTML, kontrol ve görünmez karakterler temizlenir. Konum sabit, uzun ad otomatik küçülür. |
+| Ödeme ağı logoları | Kütüphanede yok. |
+
+`js/rules.js` DOM'dan bağımsızdır: **aynı dosya Cloudflare Worker'da sunucu doğrulaması için kullanılabilir** (`module.exports` var). `validateDesign()` gelen JSON'u izin listesine göre yeniden kurar, `system_*` katmanlarını reddeder, alan çakışmalarını denetler. İstemci kontrolleri yalnızca deneyim içindir.
+
+## Dosya yapısı
+
+```
+index.html        banka kabuğu + editör iskeleti
+css/style.css
+js/rules.js       kurallar, doğrulama, çakışma (Worker ile paylaşılacak)
+js/library.js     şekil, zemin, efekt, çip listeleri
+js/render.js      tasarım + sistem kaydı → SVG
+js/templates.js   4 şablon
+js/editor.js      editör
+js/app.js         banka sayfaları, yönlendirme, yerel sistem kaydı
+assets/           logo ikonu (SVG) ve yazı tipi logosu (PNG)
+docs/             şartname PDF, seçilen logo/kart görseli
+```
+
+## Bilinen sınırlar (bu sürüm)
+
+- Veriler `localStorage`'da: `fnx.design` (kayıtlı), `fnx.draft` (taslak), `fnx.system` (kart numarası/CVV — **sunucu gelince Worker atayacak**). Sayfa verisini temizlemek hepsini sıfırlar.
+- Bakiye ve hareketler örnek veridir.
+- Kullanıcı görsel yükleme kapalı (şartnamedeki dosya kontrolleri yazılana kadar).
+- Banka yazı tipi logosu, seçilen görselden şeffaf PNG olarak çıkarıldı (`assets/wordmark.png`, 1422×303). Vektör/SVG orijinali varsa değiştirmek tek dosyalık iş.
+
+## Sıradaki adımlar
+
+1. **Aşama 5:** Cloudflare Worker + D1: e-posta oturumu, `/api/card-designs`, sürüm çakışması, `rules.js` ile sunucu doğrulaması
+2. **Aşama 4:** Güvenli görsel yükleme (R2), ek doku/efektler
+3. **Aşama 6:** Sanal bakiye, katalog, sunucu taraflı işlem kayıtları

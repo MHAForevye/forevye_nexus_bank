@@ -11,30 +11,34 @@
 
   function ss(op, v, key) { key = key || KEY; try { if (op === 'get') return sessionStorage.getItem(key); if (op === 'set') sessionStorage.setItem(key, v); else sessionStorage.removeItem(key); } catch (e) {} return null; }
 
-  // fetch hiç yanıt alamadığında nedeni ayırır. no-cors: yanıt okunamaz ama sunucuya ulaşılırsa istek "çözülür"; CORS'tan etkilenmeyen statik bir dosya kullanılır.
-  // true  → Nexus ayakta, yanıtı tarayıcı engelledi (neredeyse her zaman CORS: Nexus'taki EDITOR_URL bu sitenin adresiyle uyuşmuyor).
-  // false → Nexus'a hiç bağlanılamadı (adres yanlış, Worker yayında değil, ağ yok ya da https sayfadan http adrese istek).
-  function reachable() {
-    var ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = ctl ? setTimeout(function () { ctl.abort(); }, 7000) : 0;
-    return fetch(NEXUS + '/assets/logo-icon.svg', { mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: ctl ? ctl.signal : undefined })
-      .then(function () { return true; }, function () { return false; })
-      .then(function (ok) { if (timer) clearTimeout(timer); return ok; });
+  // fetch hiç yanıt alamadığında nedeni ayırır (üç ayrı yoklama):
+  //  1) CORS'lu GET /api/editor/card (jetonsuz → 401 beklenir): yanıt gelirse Nexus ayakta ve CORS izni TAMAM.
+  //  2) no-cors GET /api/market: yanıt "çözülürse" Nexus ayakta ama tarayıcı yanıtı (CORS) engelliyor.
+  //  3) ikisi de olmazsa gerçekten ulaşılamıyor (adres/ağ/engelleyici eklenti).
+  function probe(url, opts) {
+    var ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = ctl ? setTimeout(function () { ctl.abort(); }, 8000) : 0;
+    opts.signal = ctl ? ctl.signal : undefined; opts.cache = 'no-store'; opts.credentials = 'omit';
+    return fetch(url, opts).then(function (r) { return { ok: true, status: r.status }; }, function (er) { return { ok: false, err: String((er && er.name === 'AbortError') ? 'zaman aşımı (8 sn)' : (er && er.message) || er) }; })
+      .then(function (x) { if (timer) clearTimeout(timer); return x; });
   }
-  function unreachable() {
-    return reachable().then(function (up) {
-      var msg = up
-        ? 'Nexus’a ulaşıldı ama tarayıcı yanıtı engelledi (CORS). Nexus’taki EDITOR_URL (wrangler.toml) şu kaynağı içermeli: ' + location.origin
-        : (location.protocol === 'https:' && /^http:/i.test(NEXUS)
-          ? 'Bu site https, Nexus adresi ise http (' + NEXUS + '): tarayıcı karışık içeriği engeller. config.js içindeki NEXUS_URL https olmalı.'
-          : 'Nexus sunucusuna bağlanılamadı (' + NEXUS + '). config.js içindeki NEXUS_URL doğru mu ve Nexus Worker’ı yayında mı kontrol et.');
-      var e = new Error(msg); e.offline = true; e.reason = up ? 'cors' : 'down'; return e;
+  function unreachable(origErr) {
+    return probe(NEXUS + '/api/editor/card', { method: 'GET' }).then(function (cors) {
+      if (cors.ok) return { reason: 'retry', detail: 'HTTP ' + cors.status };
+      return probe(NEXUS + '/api/market', { method: 'GET', mode: 'no-cors' }).then(function (raw) { return { reason: raw.ok ? 'cors' : 'down', detail: raw.ok ? '' : raw.err }; });
+    }).then(function (r) {
+      var msg;
+      if (r.reason === 'retry') msg = 'Nexus’a ulaşıldı ve CORS izni var, ama istek bu sefer tamamlanamadı (geçici ağ hatası ya da Worker hatası). “Tekrar dene”ye bas; sürerse Nexus’ta Cloudflare → Workers → Logs’a bak.';
+      else if (r.reason === 'cors') msg = 'Nexus’a ulaşıldı ama tarayıcı yanıtı engelledi (CORS). Nexus’taki EDITOR_URL (wrangler.toml) şu kaynağı içermeli: ' + location.origin + ' — ve Worker’ın güncel sürümü yayında olmalı (npm run deploy).';
+      else if (location.protocol === 'https:' && /^http:/i.test(NEXUS)) msg = 'Bu site https, Nexus adresi ise http (' + NEXUS + '): tarayıcı karışık içeriği engeller. config.js içindeki NEXUS_URL https olmalı.';
+      else msg = 'Nexus sunucusuna bağlanılamadı (' + NEXUS + '). Ayrıntı: ' + (r.detail || (origErr && origErr.message) || 'bilinmiyor') + '. Reklam/gizlilik eklentilerini kapatıp dene; sürerse config.js içindeki NEXUS_URL ve Worker’ın yayında olduğunu kontrol et.';
+      var e = new Error(msg); e.offline = true; e.reason = r.reason; return e;
     });
   }
 
   function call(method, path, token, body) {
     var h = {}; if (body !== undefined) h['content-type'] = 'application/json'; if (token) h.authorization = 'Bearer ' + token;
     return fetch(NEXUS + path, { method: method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit' })
-      .catch(function () { return unreachable().then(function (e) { throw e; }); })
+      .catch(function (oe) { return unreachable(oe).then(function (e) { throw e; }); })
       .then(function (res) {
         return res.json().catch(function () { return null; }).then(function (d) {
           if (!res.ok) { var er = (d && d.error) || {}; var e = new Error(er.message || 'İşlem tamamlanamadı.'); e.status = res.status; e.code = er.code; e.errors = er.errors; throw e; }

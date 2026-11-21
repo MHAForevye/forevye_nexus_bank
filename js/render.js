@@ -31,13 +31,21 @@
     cs.forEach(function (c) { rgb(c).forEach(function (v, i) { t[i] += v / cs.length; }); });
     return '#' + t.map(function (v) { return ('0' + Math.round(v).toString(16)).slice(-2); }).join('');
   }
-  // Sistem öğelerinin rengi zemin parlaklığına göre otomatik seçilir (okunabilirlik).
+  // Sistem öğelerinin (logo, banka adı, kart bilgisi) rengi, zemindeki HER rengi gözeterek en okunaklı seçeneğe kilitlenir.
+  // Şartname bölüm 6: marka her temada yeterli kontrasta sahip olmalı. Kullanıcı bu rengi seçemez.
+  var MIN_BRAND = 4.5, MIN_NAME = 3;
+  function minContrast(c, d) {
+    return Math.min.apply(null, bgLayer(d).properties.colors.map(function (b) { return contrast(c, b); }));
+  }
   function tone(d) {
-    var avg = bgAvgColor(d), dark = relLum(avg) < 0.3;
-    var brand = dark ? '#F2F4F8' : '#14161B';
-    if (dark && d.template === 'signature') brand = '#D8B36A';
-    var nm = d.nameStyle && d.nameStyle.color !== 'auto' ? d.nameStyle.color : brand;
-    return { dark: dark, brand: brand, name: nm, avg: avg };
+    var avg = bgAvgColor(d), light = '#F2F4F8', dark = '#14161B', gold = '#D8B36A';
+    var brand = minContrast(light, d) >= minContrast(dark, d) ? light : dark;
+    if (d.template === 'signature' && minContrast(gold, d) >= MIN_BRAND) brand = gold;
+    var bc = minContrast(brand, d);
+    var want = d.nameStyle && d.nameStyle.color !== 'auto' ? d.nameStyle.color : null;
+    var fallback = !!want && minContrast(want, d) < MIN_NAME;   // okunmayan özel ad rengi uygulanmaz
+    var nm = want && !fallback ? want : brand;
+    return { dark: brand === light, brand: brand, name: nm, avg: avg, brandContrast: bc, plate: bc < 3, nameFallback: fallback };
   }
 
   // ---- Şekil çizimleri (100x100 kutu) ----
@@ -186,6 +194,11 @@
     var last4 = String((sys && sys.cardNumber) || '0000').replace(/\D/g, '').slice(-4);
     var info = '<g data-sys="info"><path d="M748 62H800" stroke="' + t.brand + '" stroke-width="3.5" stroke-linecap="round" opacity=".9"/>' +
       '<text x="830" y="498" text-anchor="end" font-family="' + FONT + '" font-size="22" letter-spacing="3" fill="' + t.brand + '" opacity=".85">•••• ' + esc(last4) + '</text></g>';
+    // Hiçbir renk logoya yeterli kontrast veremiyorsa (ör. çok renkli/orta tonlu zemin) sistem, markanın arkasına kendi yarı saydam zeminini koyar.
+    if (t.plate) {
+      var bz = R.ZONES.filter(function (z) { return z.id === 'brand'; })[0];
+      body += '<rect data-sys="brand-plate" x="' + bz.x + '" y="' + (bz.y + 6) + '" width="' + (bz.w - 20) + '" height="' + (bz.h - 12) + '" rx="22" fill="' + (t.dark ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.6)') + '"/>';
+    }
     body += brand + chipMarkup(d.chipStyle || 'gold', 52, 176, 112, 88, P) + info;
 
     // Kullanıcı adı (Grup E): yerleşimi sabit, boyutu otomatik sığdırılır.
@@ -209,6 +222,6 @@
   }
 
   root.FNXRender = { renderCard: renderCard, cardSvg: cardSvg, iconSvg: iconSvg, shapeInner: shapeInner, tone: tone,
-    contrast: contrast, relLum: relLum, esc: esc, bgLayer: bgLayer, chipMarkup: chipMarkup, WORDMARK: WORDMARK };
+    contrast: contrast, minContrast: minContrast, relLum: relLum, esc: esc, bgLayer: bgLayer, chipMarkup: chipMarkup, WORDMARK: WORDMARK };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.FNXRender;
 })(typeof window !== 'undefined' ? window : globalThis);

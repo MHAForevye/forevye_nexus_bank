@@ -59,6 +59,12 @@
     return { ok: true, value: v };
   }
 
+  function lum(h) {
+    var c = [1, 3, 5].map(function (i) { var v = parseInt(h.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+
   function bbox(p) {
     var a = (p.rotation || 0) * Math.PI / 180;
     var c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
@@ -193,6 +199,11 @@
         out.layers.push(l);
       });
     }
+    // Okunabilirlik: özel ad rengi zemindeki her renge karşı en az 3:1 olmalı (aksi halde ad görünmez olur).
+    if (bg && out.nameStyle.color !== 'auto') {
+      var worst = Math.min.apply(null, bg.properties.colors.map(function (c) { return ratio(out.nameStyle.color, c); }));
+      if (worst < 3) errors.push('Ad rengi zeminle yeterli kontrast sağlamıyor (en az 3:1).');
+    }
     out.layers.forEach(function (l, i) { l.zIndex = i * 10; });
     return { ok: errors.length === 0, errors: errors, design: out };
   }
@@ -202,7 +213,7 @@
     TEXTURE_KINDS: TEXTURE_KINDS, STROKE_ONLY: STROKE_ONLY, TEMPLATES: TEMPLATES, CHIP_STYLES: CHIP_STYLES,
     FINISHES: FINISHES, OBJ_EFFECTS: OBJ_EFFECTS, MAX_LAYERS: MAX_LAYERS,
     sanitizeName: sanitizeName, validateName: validateName, bbox: bbox, violation: violation,
-    pushOut: pushOut, isLarge: isLarge, validateDesign: validateDesign
+    pushOut: pushOut, isLarge: isLarge, contrastRatio: ratio, validateDesign: validateDesign
   };
   root.FNXRules = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

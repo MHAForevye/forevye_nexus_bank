@@ -332,7 +332,8 @@
       `<button type="button" class="chipbtn${cur === 'auto' ? ' on' : ''}" data-ncolor="auto">Otomatik</button>` +
       L.NAME_COLORS.map(c => `<button type="button" class="sw sm${cur.toLowerCase() === c.toLowerCase() ? ' on' : ''}" data-ncolor="${c}" style="background:${c}" aria-label="${c}"></button>`).join('') +
       '</div>' + colorField('Özel renk', 'ncustom', t.name, '', false) +
-      `<p class="${ratio < 3 ? 'warn' : 'muted'} pad">Okunabilirlik: ${ratio.toFixed(1)}:1${ratio < 3 ? ' — düşük' : ''}</p>` +
+      `<p class="${ratio < 3 || t.nameFallback ? 'warn' : 'muted'} pad">Okunabilirlik: ${ratio.toFixed(1)}:1${ratio < 3 ? ' — düşük' : ''}</p>` +
+      (t.nameFallback ? '<p class="warn pad">Seçtiğin renk zeminde okunamadığı için otomatik renk kullanılıyor. Kaydetmek için okunaklı bir renk seç.</p>' : '') +
       '<p class="muted pad">Adın konumu ve güvenli alanı sistem tarafından sabitlenir; uzun adlar otomatik küçülür.</p>';
   }
   function bgProps(l) {

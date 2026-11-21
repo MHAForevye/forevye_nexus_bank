@@ -73,13 +73,13 @@
       </section>
       <section class="panel balance">
         <p class="muted">Sanal bakiye</p>
-        <p class="amount">${fmt(BALANCE)} <span>NX</span></p>
-        <p class="note">Oyun içi bakiyedir; gerçek para veya banka mevduatı değildir.</p>
+        <p class="amount">${fmt(BALANCE)} <span>FN</span></p>
+        <p class="note">Oyun içi para birimi FN ile gösterilir; gerçek para veya banka mevduatı değildir.</p>
         <div class="row"><button class="btn" type="button" disabled>Gönder · yakında</button><button class="btn" type="button" disabled>Mağaza · yakında</button></div>
       </section>
       <section class="panel tx">
         <h2 class="panel-h">Son hareketler</h2>
-        <ul class="txlist">${TX.map(x => `<li><span><b>${esc(x.t)}</b><small>${x.d}</small></span><span class="${x.a < 0 ? 'neg' : 'pos'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))} NX</span></li>`).join('')}</ul>
+        <ul class="txlist">${TX.map(x => `<li><span><b>${esc(x.t)}</b><small>${x.d}</small></span><span class="${x.a < 0 ? 'neg' : 'pos'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))} FN</span></li>`).join('')}</ul>
         <p class="note">Örnek veriler. Gerçek işlem kayıtları sanal ekonomi aşamasında sunucudan gelecek.</p>
       </section>
     </div>`;

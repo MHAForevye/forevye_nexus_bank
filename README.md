@@ -37,6 +37,7 @@ Derleme adımı yok; düz HTML/CSS/JS.
 | Çip / logo / bilgi bölgeleri | `js/rules.js` içindeki `ZONES`. Küçük–orta nesne bölgeyle kesişirse bırakınca en yakın güvenli konuma itilir, olmazsa eski yerine döner. Katman sırası bunu aşamaz. |
 | Büyük nesneler (kartın %35'inden fazla) | Serbesttir, ancak çip ve logo bölgesi çizimde **kesilir**; üstünü örtemez. |
 | Kullanıcı adı | 2–18 karakter; harf, rakam, boşluk ve `. - _ '`. HTML, kontrol ve görünmez karakterler temizlenir. Konum sabit, uzun ad otomatik küçülür. |
+| Okunabilirlik (marka + ad) | Logo/banka adı/kart bilgisi rengini **sistem** seçer: zemindeki her renge karşı en okunaklı açık/koyu ton; hiçbir ton yeterli (3:1) olmazsa markanın arkasına sistem kendi yarı saydam plakasını koyar. Özel ad rengi zeminle 3:1'in altındaysa kaydedilemez (`validateDesign` hata verir) ve çizimde uygulanmaz. |
 | Ödeme ağı logoları | Kütüphanede yok. |
 
 `js/rules.js` DOM'dan bağımsızdır: **aynı dosya Cloudflare Worker'da sunucu doğrulaması için kullanılabilir** (`module.exports` var). `validateDesign()` gelen JSON'u izin listesine göre yeniden kurar, `system_*` katmanlarını reddeder, alan çakışmalarını denetler. İstemci kontrolleri yalnızca deneyim içindir.
@@ -59,7 +60,7 @@ docs/             şartname PDF, seçilen logo/kart görseli
 ## Bilinen sınırlar (bu sürüm)
 
 - Veriler `localStorage`'da: `fnx.design` (kayıtlı), `fnx.draft` (taslak), `fnx.system` (kart numarası/CVV — **sunucu gelince Worker atayacak**). Sayfa verisini temizlemek hepsini sıfırlar.
-- Bakiye ve hareketler örnek veridir.
+- Para birimi **FN**'dir (banka ile aynı). Bakiye ve hareketler hâlâ örnek veridir; gerçek bakiye ve kristal borsası `forevye-nexus` deposundadır, bağlama sonraki adımdır.
 - Kullanıcı görsel yükleme kapalı (şartnamedeki dosya kontrolleri yazılana kadar).
 - Banka yazı tipi logosu, seçilen görselden şeffaf PNG olarak çıkarıldı (`assets/wordmark.png`, 1422×303). Vektör/SVG orijinali varsa değiştirmek tek dosyalık iş.
 

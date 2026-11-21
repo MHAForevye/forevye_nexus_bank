@@ -6,14 +6,35 @@
   var CFG = root.FNX_CONFIG || {};
   var NEXUS = String(CFG.NEXUS_URL || '').replace(/\/+$/, '');
   var KEY = 'fnx.session';
+  var PEND = 'fnx.ticket';   // sunucuya hiç ulaşılamadıysa bilet (5 dk, tek kullanımlık) yalnızca bu sekmede "Tekrar dene" için saklanır
   var S = { token: '', payload: null, returnPath: '' };
 
-  function ss(op, v) { try { if (op === 'get') return sessionStorage.getItem(KEY); if (op === 'set') sessionStorage.setItem(KEY, v); else sessionStorage.removeItem(KEY); } catch (e) {} return null; }
+  function ss(op, v, key) { key = key || KEY; try { if (op === 'get') return sessionStorage.getItem(key); if (op === 'set') sessionStorage.setItem(key, v); else sessionStorage.removeItem(key); } catch (e) {} return null; }
+
+  // fetch hiç yanıt alamadığında nedeni ayırır. no-cors: yanıt okunamaz ama sunucuya ulaşılırsa istek "çözülür"; CORS'tan etkilenmeyen statik bir dosya kullanılır.
+  // true  → Nexus ayakta, yanıtı tarayıcı engelledi (neredeyse her zaman CORS: Nexus'taki EDITOR_URL bu sitenin adresiyle uyuşmuyor).
+  // false → Nexus'a hiç bağlanılamadı (adres yanlış, Worker yayında değil, ağ yok ya da https sayfadan http adrese istek).
+  function reachable() {
+    var ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = ctl ? setTimeout(function () { ctl.abort(); }, 7000) : 0;
+    return fetch(NEXUS + '/assets/logo-icon.svg', { mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: ctl ? ctl.signal : undefined })
+      .then(function () { return true; }, function () { return false; })
+      .then(function (ok) { if (timer) clearTimeout(timer); return ok; });
+  }
+  function unreachable() {
+    return reachable().then(function (up) {
+      var msg = up
+        ? 'Nexus’a ulaşıldı ama tarayıcı yanıtı engelledi (CORS). Nexus’taki EDITOR_URL (wrangler.toml) şu kaynağı içermeli: ' + location.origin
+        : (location.protocol === 'https:' && /^http:/i.test(NEXUS)
+          ? 'Bu site https, Nexus adresi ise http (' + NEXUS + '): tarayıcı karışık içeriği engeller. config.js içindeki NEXUS_URL https olmalı.'
+          : 'Nexus sunucusuna bağlanılamadı (' + NEXUS + '). config.js içindeki NEXUS_URL doğru mu ve Nexus Worker’ı yayında mı kontrol et.');
+      var e = new Error(msg); e.offline = true; e.reason = up ? 'cors' : 'down'; return e;
+    });
+  }
 
   function call(method, path, token, body) {
     var h = {}; if (body !== undefined) h['content-type'] = 'application/json'; if (token) h.authorization = 'Bearer ' + token;
     return fetch(NEXUS + path, { method: method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit' })
-      .catch(function () { var e = new Error('Sunucuya ulaşılamadı.'); e.offline = true; throw e; })
+      .catch(function () { return unreachable().then(function (e) { throw e; }); })
       .then(function (res) {
         return res.json().catch(function () { return null; }).then(function (d) {
           if (!res.ok) { var er = (d && d.error) || {}; var e = new Error(er.message || 'İşlem tamamlanamadı.'); e.status = res.status; e.code = er.code; e.errors = er.errors; throw e; }
@@ -32,8 +53,10 @@
   function boot() {
     var m = /(?:^|[#&])t=([A-Za-z0-9_-]{20,80})/.exec(location.hash || '');
     if (m) history.replaceState(null, '', location.pathname + location.search);   // bilet adres çubuğunda/geçmişte kalmasın
-    var start = m
-      ? call('POST', '/api/editor/exchange', '', { ticket: m[1] }).then(function (d) { S.token = d.token; ss('set', d.token); return d; })
+    var ticket = m ? m[1] : ss('get', null, PEND);   // adres çubuğundaki bilet, yoksa daha önce ulaşılamadığı için saklanan bilet
+    var start = ticket
+      ? call('POST', '/api/editor/exchange', '', { ticket: ticket }).then(function (d) { ss('del', null, PEND); S.token = d.token; ss('set', d.token); return d; },
+        function (e) { if (e.offline) ss('set', ticket, PEND); else ss('del', null, PEND); throw e; })
       : (function () {
         var t = ss('get'); if (!t) return Promise.resolve(null);
         S.token = t; return call('GET', '/api/editor/card', t).catch(function (e) { if (e.status === 401) { ss('del'); S.token = ''; return null; } throw e; });

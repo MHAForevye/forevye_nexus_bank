@@ -169,12 +169,14 @@
   }
 
   /* ---------- Nexus'a bağlı mod: yalnızca kart editörü ---------- */
-  function showGate(title, text, linkText, href) {
+  function showGate(title, text, linkText, href, retry) {
     $('#view-app').hidden = true; $('#view-editor').hidden = true;
     const g = $('#view-gate'); g.hidden = false;
     g.innerHTML = `<div class="gate-card"><span class="brand-icon">${X.iconSvg('')}</span><h1>${esc(title)}</h1><p>${esc(text)}</p>` +
-      (href ? `<a class="btn primary" href="${esc(href)}">${esc(linkText)}</a>` : '') +
+      (retry ? '<button class="btn primary" id="gate-retry" type="button">Tekrar dene</button>' : '') +
+      (href ? `<a class="btn${retry ? '' : ' primary'}" href="${esc(href)}">${esc(linkText)}</a>` : '') +
       `<p class="note">Giriş, Nexus'ta FOREVYE ID ile yapılır; parolan bu sayfaya hiç gelmez.</p></div>`;
+    if (retry) $('#gate-retry').addEventListener('click', () => location.reload());
   }
   function openConnected(payload) {
     const C = root.FNXConnect;
@@ -196,7 +198,7 @@
     $('#side-icon').innerHTML = X.iconSvg('');
     C.boot().then(r => {
       if (r.state === 'ready') return openConnected(r.payload);
-      if (r.state === 'error') return showGate('Editör açılamadı', r.message, 'Nexus\'a dön ve yeniden aç', C.launchUrl());
+      if (r.state === 'error') return showGate('Editör açılamadı', r.message, 'Nexus\'a dön ve yeniden aç', C.launchUrl(), !!r.offline);
       showGate('Kart editörü', 'Kartını tasarlamak için önce Nexus\'ta giriş yapmalısın.', 'Nexus\'ta giriş yap', C.launchUrl());
     });
   }

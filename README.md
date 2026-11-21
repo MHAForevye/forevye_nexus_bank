@@ -5,6 +5,19 @@ Bu ilk sürümde **banka arayüzü** ve **kart oluşturma (editör) mekaniği** 
 
 Kaynak şartname: [`docs/kart-tasarim-sartnamesi-v1.pdf`](docs/kart-tasarim-sartnamesi-v1.pdf)
 
+## Nexus'a bağlı mod (kart editörü)
+
+`config.js` içindeki `NEXUS_URL` doluysa bu site yalnızca **kart editörü** olarak çalışır ve `forevye-nexus` ile bağlanır:
+
+1. Kullanıcı Nexus'ta **Kartını tasarla**'ya basar → Nexus tek kullanımlık bir bilet üretip buraya `#t=<bilet>` ile yollar.
+2. Editör bileti jetona çevirir (`POST /api/editor/exchange`), adres çubuğundan siler; jeton yalnızca bu sekmenin `sessionStorage`'ında durur.
+3. **Kaydet** → `PUT /api/editor/card`. Sunucu `js/rules.js` ile (aynı dosya) yeniden doğrular; sürümü ve geçmişi Nexus yazar.
+4. **Çık** → `NEXUS/#/cards/<id>`.
+
+Oturum yoksa bir **giriş kapısı** çıkar ve kullanıcı Nexus'a yönlendirilir; giriş orada **FOREVYE ID ile** yapılır (parola bu siteye hiç gelmez). Nexus tarafında `EDITOR_URL` bu sitenin adresi olmalıdır (CORS yalnızca o kaynağa açılır). `NEXUS_URL` boşsa eski yerel demo çalışır.
+
+> `js/rules.js` iki depoda (bu depo ve `forevye-nexus/shared/card-rules.js`) BİREBİR aynı kalmalıdır; `js/render.js` de `forevye-nexus/public/js/card-render.js` ile aynıdır.
+
 ## Çalıştırma
 
 Derleme adımı yok; düz HTML/CSS/JS.
@@ -47,7 +60,9 @@ Derleme adımı yok; düz HTML/CSS/JS.
 ```
 index.html        banka kabuğu + editör iskeleti
 css/style.css
-js/rules.js       kurallar, doğrulama, çakışma (Worker ile paylaşılacak)
+js/rules.js       kurallar, doğrulama, çakışma (Nexus Worker'ında da aynı dosya çalışır)
+js/connect.js     Nexus bağlantısı: bilet→jeton, kaydet (persist), çık, giriş kapısı
+config.js         NEXUS_URL
 js/library.js     şekil, zemin, efekt, çip listeleri
 js/render.js      tasarım + sistem kaydı → SVG
 js/templates.js   4 şablon

@@ -63,16 +63,17 @@
 
   /* ---------- durum, taslak ---------- */
   function setStatus(kind, text) { el.status.dataset.state = kind; el.status.textContent = text; }
+  const draftKey = () => (E.opts && E.opts.draftKey) || 'fnx.draft';
   function scheduleDraft() { clearTimeout(E.draftTimer); E.draftTimer = setTimeout(saveDraft, 700); }
   function saveDraft() {
     if (!E.active) return;
     try {
-      localStorage.setItem('fnx.draft', JSON.stringify({ design: E.design, savedAt: Date.now() }));
+      localStorage.setItem(draftKey(), JSON.stringify({ design: E.design, savedAt: Date.now() }));
       const t = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       setStatus('draft', 'Taslak kaydedildi ' + t + (navigator.onLine ? '' : ' · çevrimdışı'));
     } catch (e) { setStatus('error', 'Taslak kaydedilemedi — tarayıcı depolaması kullanılamıyor'); }
   }
-  function clearDraft() { clearTimeout(E.draftTimer); try { localStorage.removeItem('fnx.draft'); } catch (e) {} }
+  function clearDraft() { clearTimeout(E.draftTimer); try { localStorage.removeItem(draftKey()); } catch (e) {} }
 
   function renderMsg() {
     const t = X.tone(E.design);
@@ -85,7 +86,7 @@
     renderStage(); renderMsg();
     el.undo.disabled = !E.undo.length; el.redo.disabled = !E.redo.length;
     if (isDirty()) { setStatus('dirty', 'Kaydedilmemiş değişiklik var'); scheduleDraft(); }
-    else { setStatus('saved', 'Kaydedildi · sürüm ' + E.saved.version); clearDraft(); }
+    else { setStatus('saved', E.opts && E.opts.isNew ? 'Yeni kart · henüz kaydedilmedi' : 'Kaydedildi · sürüm ' + E.saved.version); clearDraft(); }
   }
   function fullChanged() { stageChanged(); renderProps(); renderLayers(); renderLib(); }
   function renderAll() { E.errors = []; fullChanged(); el.nameCount.textContent = Array.from(E.design.userDisplayName).length + '/' + R.NAME_LIMITS.max; }
@@ -501,18 +502,31 @@
   }
 
   /* ---------- kaydet, çık, sıfırla ---------- */
-  function save() {
+  let saving = false;
+  async function save() {
+    if (saving) return;
     const res = R.validateDesign(E.design);
     if (!res.ok) { E.errors = res.errors; renderMsg(); setStatus('error', 'Kaydedilemedi — kuralları kontrol et'); return; }
-    // Sunucu bağlandığında burada POST /api/card-designs çağrılır. Worker aynı validateDesign
-    // kodunu çalıştırır ve yeni sürüm numarasını döner; istemcinin gönderdiği sürüme güvenilmez.
-    const out = res.design; out.version = (E.saved.version || 0) + 1;
-    try { localStorage.setItem('fnx.design', JSON.stringify(out)); localStorage.removeItem('fnx.draft'); }
-    catch (e) { setStatus('error', 'Kayıt başarısız — tarayıcı depolaması kullanılamıyor'); return; }
-    clearTimeout(E.draftTimer);
-    E.design = out; E.saved = clone(out); E.savedJson = JSON.stringify(out); E.errors = [];
+    const out = res.design;
+    let final = out;
+    if (E.opts && E.opts.persist) {
+      // Nexus'a bağlı: asıl doğrulamayı sunucu aynı rules.js ile yapar; sürüm ve geçmişi de sunucu yazar. İstemcinin sürümüne güvenilmez.
+      saving = true; $('#ed-save').disabled = true; setStatus('draft', 'Kaydediliyor…');
+      try { final = (await E.opts.persist(out)) || out; }
+      catch (e) {
+        E.errors = e.errors && e.errors.length ? e.errors : [e.message || 'Kaydedilemedi.']; renderMsg();
+        setStatus('error', e.offline ? 'Bağlantı yok — taslak bu cihazda korunuyor' : 'Kaydedilemedi'); return;
+      } finally { saving = false; $('#ed-save').disabled = false; }
+      if (E.opts) E.opts.isNew = false;
+    } else {
+      out.version = (E.saved.version || 0) + 1;
+      try { localStorage.setItem('fnx.design', JSON.stringify(out)); localStorage.removeItem(draftKey()); }
+      catch (e) { setStatus('error', 'Kayıt başarısız — tarayıcı depolaması kullanılamıyor'); return; }
+    }
+    clearTimeout(E.draftTimer); clearDraft();
+    E.design = final; E.saved = clone(final); E.savedJson = JSON.stringify(final); E.errors = [];
     fullChanged(); toast('Kartın kaydedildi.');
-    if (E.opts && E.opts.onSave) E.opts.onSave(out);
+    if (E.opts && E.opts.onSave) E.opts.onSave(final);
   }
   function exit() {
     if (isDirty() && !confirm('Kaydedilmemiş değişikliklerin taslak olarak bu cihazda kalır. Çıkılsın mı?')) return;

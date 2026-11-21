@@ -147,8 +147,8 @@
 
   function finishMarkup(f, P) {
     if (f === 'glossy') return '<rect width="' + W + '" height="' + H + '" fill="url(#' + P + 'gloss)"/>';
-    if (f === 'foil') return '<rect width="' + W + '" height="' + H + '" fill="url(#' + P + 'foil)" style="mix-blend-mode:soft-light"/>';
-    if (f === 'holo') return '<rect width="' + W + '" height="' + H + '" fill="url(#' + P + 'holo)" opacity="0.5" style="mix-blend-mode:overlay"/>';
+    if (f === 'foil') return '<rect width="' + W + '" height="' + H + '" fill="url(#' + P + 'foil)" data-blend="soft-light" style="mix-blend-mode:soft-light"/>';
+    if (f === 'holo') return '<rect width="' + W + '" height="' + H + '" fill="url(#' + P + 'holo)" opacity="0.5" data-blend="overlay" style="mix-blend-mode:overlay"/>';
     return '';
   }
 
@@ -191,7 +191,8 @@
       '<mask id="' + P + 'wm" maskUnits="userSpaceOnUse" x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '">' +
       '<image href="' + WORDMARK.src + '" x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '"/></mask>' +
       '<rect x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '" fill="' + t.brand + '" mask="url(#' + P + 'wm)"/></g>';
-    var last4 = String((sys && sys.cardNumber) || '0000').replace(/\D/g, '').slice(-4);
+    // Nexus'ta kart kimliği NXC-XXXX-XXXX biçimindedir (harf içerir): sys.last4 verilirse olduğu gibi gösterilir, yoksa kart numarasının son 4 hanesi.
+    var last4 = sys && sys.last4 ? String(sys.last4).replace(/[^A-Za-z0-9•]/g, '').slice(-4) : String((sys && sys.cardNumber) || '0000').replace(/\D/g, '').slice(-4);
     var info = '<g data-sys="info"><path d="M748 62H800" stroke="' + t.brand + '" stroke-width="3.5" stroke-linecap="round" opacity=".9"/>' +
       '<text x="830" y="498" text-anchor="end" font-family="' + FONT + '" font-size="22" letter-spacing="3" fill="' + t.brand + '" opacity=".85">•••• ' + esc(last4) + '</text></g>';
     // Hiçbir renk logoya yeterli kontrast veremiyorsa (ör. çok renkli/orta tonlu zemin) sistem, markanın arkasına kendi yarı saydam zeminini koyar.

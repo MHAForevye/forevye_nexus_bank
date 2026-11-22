@@ -84,3 +84,6 @@ docs/             şartname PDF, seçilen logo/kart görseli
 1. **Aşama 5:** Cloudflare Worker + D1: e-posta oturumu, `/api/card-designs`, sürüm çakışması, `rules.js` ile sunucu doğrulaması
 2. **Aşama 4:** Güvenli görsel yükleme (R2), ek doku/efektler
 3. **Aşama 6:** Sanal bakiye, katalog, sunucu taraflı işlem kayıtları
+
+
+Kart QR kodu ve tam sanal kart kodu önizlemesi için `js/qrcode.js` yerel olarak yüklenir. QR, yalnızca Nexus sanal kart kodunu taşır; fiziksel NFC veya gerçek ödeme kartı değildir.

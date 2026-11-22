@@ -189,7 +189,7 @@
     const dr = store.get(key, null);
     if (dr && dr.design && Array.isArray(dr.design.layers) && JSON.stringify(dr.design) !== JSON.stringify(saved)) draft = dr.design;
     root.FNXEditor.open({
-      saved, draft, isNew, system: { last4: tok ? tok.slice(-4) : '••••' }, draftKey: key,
+      saved, draft, isNew, system: { last4: tok ? tok.slice(-4) : '••••', cardToken: tok }, draftKey: key,
       persist: C.persist, onExit: C.exit
     });
   }

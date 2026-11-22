@@ -39,18 +39,22 @@
   </nav>
 </div>
 
-<!-- ============ Kart editörü ============ -->
-<section id="view-editor" class="editor" hidden aria-label="Kart editörü">
+<!-- ============ Kart editörü (Card Studio) ============ -->
+<section id="view-editor" class="editor" hidden aria-label="Forevye Nexus Card Studio">
   <header class="ed-top">
     <button class="btn ghost" id="ed-exit" type="button">‹ Çık</button>
-    <h1 class="ed-title">Kartını tasarla</h1>
+    <h1 class="ed-title">Card Studio</h1>
+    <div class="orient" id="ed-orient" role="group" aria-label="Kart yönü">
+      <button type="button" data-orient="landscape" aria-pressed="true" title="Yatay kart"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/></svg><span>Yatay</span></button>
+      <button type="button" data-orient="portrait" aria-pressed="false" title="Dikey kart"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/></svg><span>Dikey</span></button>
+    </div>
     <span class="ed-status" id="ed-status" role="status" aria-live="polite"></span>
     <div class="ed-actions">
       <button class="btn icon" id="ed-undo" type="button" title="Geri al (Ctrl+Z)" aria-label="Geri al">↶</button>
       <button class="btn icon" id="ed-redo" type="button" title="Yinele (Ctrl+Y)" aria-label="Yinele">↷</button>
       <button class="btn" id="ed-preview" type="button" aria-pressed="false">Önizle</button>
       <button class="btn" id="ed-reset" type="button">Sıfırla</button>
-      <button class="btn primary" id="ed-save" type="button">Kaydet</button>
+      <button class="btn primary" id="ed-save" type="button"><span class="dirty-dot" id="ed-dot" hidden></span>Kaydet</button>
     </div>
   </header>
 
@@ -63,7 +67,8 @@
     <main class="ed-stage" id="ed-stage">
       <div class="stage-bar">
         <label class="check"><input type="checkbox" id="ed-zones"> Korumalı alanları göster</label>
-        <span class="stage-hint">Nesneyi sürükle, köşesinden boyutlandır, üstteki noktadan döndür.</span>
+        <label class="check"><input type="checkbox" id="ed-snap" checked> Akıllı hizalama</label>
+        <span class="stage-hint">Sürükle · köşeden boyutlandır · üstteki noktadan döndür · Alt = hizalamayı geçici kapat</span>
       </div>
       <div class="stage-canvas" id="ed-canvas"><svg id="ed-svg" class="card-svg" viewBox="0 0 856 540" xmlns="http://www.w3.org/2000/svg" role="application" aria-label="Kart sahnesi"></svg></div>
       <div class="stage-msg" id="ed-msg" role="alert"></div>
@@ -79,7 +84,6 @@
     </aside>
 
     <section class="panel ed-layers" data-panel="layers" aria-label="Katmanlar">
-      <h2 class="panel-h">Katmanlar</h2>
       <div id="ed-layers"></div>
     </section>
   </div>
@@ -89,6 +93,10 @@
     <button type="button" data-tab="props">Özellikler</button>
     <button type="button" data-tab="layers">Katmanlar</button>
   </nav>
+
+  <div class="modal" id="ed-modal" hidden role="dialog" aria-modal="true" aria-labelledby="ed-modal-t">
+    <div class="modal-box"><h2 id="ed-modal-t"></h2><div class="modal-body" id="ed-modal-b"></div><div class="modal-acts" id="ed-modal-a"></div></div>
+  </div>
 </section>
 
 <!-- ============ Giriş kapısı (Nexus bağlı modda oturum yoksa) ============ -->

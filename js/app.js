@@ -26,6 +26,10 @@
       };
       store.set('fnx.system', s);
     }
+    if (!s.cardToken) {   // v3: kartta kod ve QR görünsün diye yerel demo kimliği
+      const al = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', pick = () => Array.from({ length: 4 }, () => al[Math.floor(Math.random() * al.length)]).join('');
+      s.cardToken = 'NXC-' + pick() + '-' + pick(); s.last4 = s.cardToken.slice(-4); store.set('fnx.system', s);
+    }
     return s;
   }
   function savedDesign() {

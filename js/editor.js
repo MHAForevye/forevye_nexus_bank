@@ -29,10 +29,10 @@
   };
   const ic = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
-  const LIB_TABS = [['tpl', 'Şablonlar'], ['bg', 'Zemin'], ['shape', 'Şekiller'], ['pattern', 'Desenler'], ['light', 'Işık'], ['fx', 'Yüzey'], ['sys', 'Sistem']];
+  const LIB_TABS = [['tpl', 'Şablonlar'], ['bg', 'Zemin'], ['shape', 'Şekiller'], ['pattern', 'Desenler'], ['light', 'Işık'], ['fx', 'Yüzey'], ['sys', 'Sistem'], ['market', 'Nexus Market']];
 
   const E = {
-    active: false, bound: false, design: null, saved: null, savedJson: '', system: null, opts: null, sel: null,
+    active: false, bound: false, design: null, saved: null, savedJson: '', system: null, baseSystem: null, opts: null, sel: null, skinProductId: null, savedSkinProductId: null,
     undo: [], redo: [], drag: null, guides: [], zones: false, snap: true, preview: false, tab: 'tpl', lightColor: '#FFFFFF',
     lastKey: null, lastT: 0, draftTimer: null, errors: [], layerDrag: null, raf: 0, scale: 1
   };
@@ -45,7 +45,7 @@
   const norm = d => R.validateDesign(d).design;
   // Kimlik/sürüm alanları kayıt karşılaştırmasına girmez.
   const dirtyKey = d => JSON.stringify(Object.assign({}, d, { designId: '', ownerId: '', version: 0 }));
-  const isDirty = () => dirtyKey(E.design) !== E.savedJson;
+  const isDirty = () => dirtyKey(E.design) !== E.savedJson || (E.skinProductId || null) !== (E.savedSkinProductId || null);
 
   /* ---------- modal ---------- */
   function ask(title, html, buttons) {
@@ -95,7 +95,7 @@
   function saveDraft() {
     if (!E.active) return;
     try {
-      localStorage.setItem(draftKey(), JSON.stringify({ design: E.design, savedAt: Date.now() }));
+      localStorage.setItem(draftKey(), JSON.stringify({ design: E.design, skinProductId: E.skinProductId || null, savedAt: Date.now() }));
       const t = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       setStatus('dirty', 'Kaydedilmemiş değişiklik var · taslak ' + t + (navigator.onLine ? '' : ' · çevrimdışı'));
     } catch (e) { setStatus('error', 'Taslak kaydedilemedi — tarayıcı depolaması kullanılamıyor'); }
@@ -498,10 +498,56 @@
         '<p class="muted pad">Doku yoğunluğunu kart zemini seçiliyken ayarlayabilirsin.</p>';
     } else if (E.tab === 'sys') {
       h = sysTabHtml();
+    } else if (E.tab === 'market') {
+      h = marketTabHtml();
     }
     el.lib.innerHTML = h;
-    if (E.tab === 'tpl') el.lib.querySelectorAll('svg').forEach(X.applyBlend);
+    if (E.tab === 'tpl' || E.tab === 'market') el.lib.querySelectorAll('svg').forEach(X.applyBlend);
   }
+  function marketTabHtml() {
+    const list = root.FNXSkins && Array.isArray(root.FNXSkins.list) ? root.FNXSkins.list : [];
+    const owned = Array.isArray(E.opts && E.opts.ownedSkins) ? E.opts.ownedSkins : [];
+    const localWallet = root.FNXWallet;
+    const cards = list.map(item => {
+      const entitlement = owned.find(x => x && (x.skin === item.id || x.product_id === item.productId));
+      const localOwn = !(E.opts && E.opts.serverOwnedOnly) && localWallet && localWallet.owns && localWallet.owns(item.id);
+      const has = !!(entitlement || localOwn);
+      const serial = entitlement && entitlement.serial ? entitlement.serial : '';
+      const active = (E.skinProductId || null) === item.productId;
+      const sys = Object.assign({}, E.system, { skin: item.id, skinProductId: item.productId, skinSerial: serial });
+      const preview = X.cardSvg(E.design, sys, { prefix: 'mk' + item.id, animate: false, placeholder: true });
+      const rarity = { common: 'Standart', rare: 'Nadir', epic: 'Destansı', legendary: 'Efsanevi', mythic: 'Mitik' }[item.rarity] || 'Özel';
+      const button = has
+        ? `<button type="button" class="btn sm${active ? '' : ' primary'}" data-skin-product="${esc(item.productId)}">${active ? 'Takılı · Çıkar' : 'Kartıma uygula'}</button>`
+        : `<button type="button" class="btn sm" data-market-buy="${esc(item.productId)}">${Number(item.price).toLocaleString('tr-TR')} FN · Satın al</button>`;
+      return `<article class="market-skin${active ? ' on' : ''}"><div class="market-skin-art">${preview}</div><div class="market-skin-info"><div class="market-skin-title"><b>${esc(item.n)}</b><span>${rarity}</span></div><p>${esc(item.d)}</p><div class="market-skin-foot"><small>${has ? 'Koleksiyonunda' + (serial ? ' · Seri ' + esc(serial) : '') : 'Sınırlı edisyon · Tek satın alma hakkı'}</small>${button}</div></div></article>`;
+    }).join('');
+    return `<div class="market-panel-head"><div><h3 class="panel-h">Nexus Market · Premium kart yüzeyleri</h3><p class="muted">Tasarımını kartın üzerine uygula. Sahip olmadıkların için Market'e git; satın alma tamamlanınca bu editöre geri dönüp kullanabilirsin.</p></div><span class="market-count">${list.length} tasarım</span></div>` +
+      (cards || '<p class="muted pad">Market kataloğu yüklenemedi.</p>') +
+      '<p class="muted pad">Satın alınan tasarımlar hesabına kalıcı olarak tanımlanır. Stok, seri numarası ve sahiplik Nexus sunucusunda tutulur.</p>';
+  }
+
+  function selectMarketSkin(productId) {
+    const item = (root.FNXSkins && root.FNXSkins.list || []).find(x => x.productId === productId);
+    if (!item) return;
+    const current = E.skinProductId || null;
+    const entitlement = (E.opts && E.opts.ownedSkins || []).find(x => x && (x.product_id === productId || x.skin === item.id));
+    const localOwn = !(E.opts && E.opts.serverOwnedOnly) && root.FNXWallet && root.FNXWallet.owns && root.FNXWallet.owns(item.id);
+    if (!entitlement && !localOwn) { toast('Bu tasarım henüz hesabında yok. Market üzerinden satın al.'); return; }
+    E.skinProductId = current === productId ? null : productId;
+    if (E.skinProductId) E.system = Object.assign({}, E.baseSystem, { skin: item.id, skinProductId: productId, skinSerial: entitlement && entitlement.serial || '' });
+    else E.system = Object.assign({}, E.baseSystem, { skin: null, skinProductId: null, skinSerial: '' });
+    fullChanged();
+  }
+
+  function openMarketProduct(productId) {
+    const C = root.FNXConnect, CFG = root.FNX_CONFIG || {};
+    setStatus('draft', 'Market bağlantısı hazırlanıyor…');
+    const go = C && C.marketTicket ? C.marketTicket(productId) : Promise.resolve(String(CFG.MARKET_URL || '').replace(/\/+$/, '') + '/?product_id=' + encodeURIComponent(productId));
+    Promise.resolve(go).then(url => { if (!url) throw new Error('Market adresi ayarlı değil.'); location.href = url; })
+      .catch(e => { toast(e.message || 'Market açılamadı.'); setStatus('error', 'Market bağlantısı kurulamadı'); });
+  }
+
   function sysTabHtml() {
     return '<h3 class="panel-h">EMV çip</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>' +
       '<h3 class="panel-h">QR kod</h3>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
@@ -773,7 +819,7 @@
     let final = out;
     if (E.opts && E.opts.persist) {
       saving = true; $('#ed-save').disabled = true; setStatus('draft', 'Kaydediliyor…');
-      try { final = (await E.opts.persist(out)) || out; }
+      try { final = (await E.opts.persist(out, E.skinProductId || null)) || out; }
       catch (e) {
         E.errors = e.errors && e.errors.length ? e.errors : [e.message || 'Kaydedilemedi.']; renderMsg();
         setStatus('error', e.offline ? 'Bağlantı yok — taslak bu cihazda korunuyor' : e.expired ? 'Oturum doldu — taslak korunuyor, Nexus’tan yeniden aç' : 'Kaydedilemedi'); return;
@@ -785,7 +831,7 @@
       catch (e) { setStatus('error', 'Kayıt başarısız — tarayıcı depolaması kullanılamıyor'); return; }
     }
     clearTimeout(E.draftTimer); clearDraft();
-    E.design = norm(final); E.saved = clone(E.design); E.savedJson = dirtyKey(E.design); E.errors = [];
+    E.design = norm(final); E.saved = clone(E.design); E.savedJson = dirtyKey(E.design); E.savedSkinProductId = E.skinProductId || null; E.errors = [];
     fullChanged(); toast('Kartın kaydedildi.');
     if (E.opts && E.opts.onSave) E.opts.onSave(final);
   }
@@ -801,7 +847,10 @@
     if (!isDirty()) { toast('Kayıtlı tasarımdan farklı bir değişiklik yok.'); return; }
     const a = await ask('Son kaydedilen tasarıma dön', 'Kaydedilmemiş tüm değişikliklerin geri alınır. Bu işlemi geri alabilirsin (Ctrl+Z).', [{ id: 'go', label: 'Sıfırla', primary: true }, { id: null, label: 'Vazgeç' }]);
     if (a !== 'go') return;
-    snap(); E.design = clone(E.saved); E.sel = null; el.name.value = E.design.userDisplayName; syncOrient(); renderAll();
+    snap(); E.design = clone(E.saved); E.skinProductId = E.savedSkinProductId || null;
+    const savedItem = (root.FNXSkins && root.FNXSkins.list || []).find(x => x.productId === E.skinProductId);
+    E.system = E.skinProductId && savedItem ? Object.assign({}, E.baseSystem, { skin: savedItem.id, skinProductId: E.skinProductId, skinSerial: (E.opts.ownedSkins || []).find(x => x.product_id === E.skinProductId)?.serial || '' }) : Object.assign({}, E.baseSystem, { skin: null, skinProductId: null, skinSerial: '' });
+    E.sel = null; el.name.value = E.design.userDisplayName; syncOrient(); renderAll();
   }
 
   /* ---------- klavye ---------- */
@@ -868,6 +917,8 @@
       else if (d.chip) { snap(); E.design.chipStyle = d.chip; fullChanged(); }
       else if (d.qrstyle) setQrStyle(d.qrstyle);
       else if (d.scolor) { snap(); E.design.sysStyle.color = d.scolor === 'auto' ? 'auto' : d.scolor.toUpperCase(); fullChanged(); }
+      else if (d.skinProduct) selectMarketSkin(d.skinProduct);
+      else if (d.marketBuy) openMarketProduct(d.marketBuy);
     });
     el.lib.addEventListener('input', e => { if (e.target.dataset.c === 'scustom') { snap('scol'); E.design.sysStyle.color = e.target.value.toUpperCase(); stageChanged(); } });
     el.tabs.addEventListener('click', e => { const b = e.target.closest('[data-ltab]'); if (b) { E.tab = b.dataset.ltab; renderLib(); } });
@@ -909,9 +960,15 @@
 
   function open(o) {
     init();
-    E.opts = o; E.system = o.system;
+    E.opts = o; E.system = clone(o.system || {}); E.baseSystem = clone(o.system || {});
+    delete E.baseSystem.skin; delete E.baseSystem.skinProductId; delete E.baseSystem.skinSerial;
+    E.skinProductId = o.skinProductId || (o.system && o.system.skinProductId) || null;
+    E.savedSkinProductId = E.skinProductId;
     E.saved = norm(o.saved); E.savedJson = dirtyKey(E.saved);
     E.design = norm(o.draft || o.saved);
+    if (o.draftSkinProductId !== undefined) E.skinProductId = o.draftSkinProductId || null;
+    const initialSkin = E.skinProductId && (root.FNXSkins && root.FNXSkins.list || []).find(x => x.productId === E.skinProductId);
+    E.system = initialSkin ? Object.assign({}, E.baseSystem, { skin: initialSkin.id, skinProductId: E.skinProductId, skinSerial: o.system && o.system.skinSerial || '' }) : Object.assign({}, E.baseSystem, { skin: null, skinProductId: null, skinSerial: '' });
     E.sel = null; E.undo = []; E.redo = []; E.errors = []; E.preview = false; E.zones = false; E.active = true; E.tab = 'tpl'; E.drag = null; E.guides = [];
     $('#ed-zones').checked = false; $('#ed-snap').checked = E.snap;
     el.preview.setAttribute('aria-pressed', 'false'); el.preview.textContent = 'Önizle';

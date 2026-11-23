@@ -133,7 +133,7 @@
   const PAGES = {
     home: renderHome, card: renderCardPage,
     activity: () => renderSoon('Hareketler', 'Bakiye ve satın alma hareketleri sanal ekonomi aşamasında burada listelenecek.'),
-    store: () => renderSoon('Mağaza', 'Hazır kart tasarımları Nexus Market’te FN ile satılır; satın aldıkların kart editöründe Şablonlar sekmesinde açılır.').replace('<a class="btn" href="#/home">', (marketUrl() ? `<a class="btn primary" href="${esc(marketUrl())}/">Mağazaya git</a> ` : '') + '<a class="btn" href="#/home">'),
+    store: () => renderSoon('Mağaza', 'Premium kart yüzeyleri Nexus Market’te FN ile satılır; satın aldıkların Nexus Market sekmesinden kartına uygulanır.').replace('<a class="btn" href="#/home">', (marketUrl() ? `<a class="btn primary" href="${esc(marketUrl())}/">Mağazaya git</a> ` : '') + '<a class="btn" href="#/home">'),
     settings: () => renderSoon('Ayarlar', 'Hesap, e-posta girişi ve güvenlik ayarları hesap aşamasında eklenecek.')
   };
 
@@ -212,9 +212,14 @@
     let draft = null;
     const dr = store.get(key, null);
     if (dr && dr.design && Array.isArray(dr.design.layers) && JSON.stringify(dr.design) !== JSON.stringify(saved)) draft = dr.design;
+    const equipped = payload.equipped_skin || null;
+    const system = { last4: tok ? tok.slice(-4) : '••••', cardToken: tok,
+      skin: equipped && equipped.skin || null, skinProductId: equipped && equipped.product_id || null, skinSerial: equipped && equipped.serial || '' };
     root.FNXEditor.open({
-      saved, draft, isNew, system: { last4: tok ? tok.slice(-4) : '••••', cardToken: tok }, draftKey: key,
-      persist: C.persist, onExit: C.exit
+      saved, draft, draftSkinProductId: dr && Object.prototype.hasOwnProperty.call(dr, 'skinProductId') ? dr.skinProductId : undefined,
+      skinProductId: equipped && equipped.product_id || null, ownedSkins: payload.owned_skins || [], serverOwnedOnly: true, isNew,
+      system, draftKey: key, marketTicket: C.marketTicket,
+      persist: (design, skinProductId) => C.persist(design, skinProductId), onExit: C.exit
     });
   }
   function startConnected() {

@@ -93,11 +93,15 @@
   }
 
   // Tasarımı Nexus'a kaydeder. Sunucunun doğrulayıp yeniden kurduğu tasarımı döner (sürümü sunucu yazar).
-  function persist(design) {
-    return call('PUT', '/api/editor/card', S.token, { design: design }).then(function (r) {
-      S.payload.card = r.card; S.payload.mode = 'edit'; S.returnPath = r.return_path || '';
+  function persist(design, skinProductId) {
+    return call('PUT', '/api/editor/card', S.token, { design: design, skin_product_id: skinProductId || null }).then(function (r) {
+      S.payload.card = r.card; S.payload.mode = 'edit'; S.payload.equipped_skin = r.skin || null; S.returnPath = r.return_path || '';
       return r.card.design;
     });
+  }
+
+  function marketTicket(productId) {
+    return call('POST', '/api/editor/shop-ticket', S.token, { product_id: productId || null }).then(function (r) { return r.url; });
   }
 
   function exit() {
@@ -105,5 +109,5 @@
     location.href = NEXUS + (S.returnPath || (id ? '/#/cards/' + id : '/#/cards'));
   }
 
-  root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, persist: persist, exit: exit, launchUrl: launchUrl, state: S };
+  root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, persist: persist, marketTicket: marketTicket, exit: exit, launchUrl: launchUrl, state: S };
 })(window);

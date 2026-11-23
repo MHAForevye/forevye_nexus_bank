@@ -17,7 +17,7 @@
     equip: function (id) { var w = load(); if (id && w.owned.indexOf(id) < 0) return false; w.equipped = id || ''; save(w); return true; },
     ledger: function () { return load().ledger.slice().reverse(); },
     // Sunucu sahiplik listesi verdiyse (ör. payload.owned_skins) birleştirir.
-    mergeOwned: function (list) { if (!Array.isArray(list)) return; var w = load(); list.forEach(function (t) { if (typeof t === 'string' && w.owned.indexOf(t) < 0) w.owned.push(t); }); save(w); },
+    mergeOwned: function (list) { if (!Array.isArray(list)) return; var w = load(); list.forEach(function (t) { var id = typeof t === 'string' ? t : (t && t.skin); if (id && w.owned.indexOf(id) < 0) w.owned.push(id); }); save(w); },
     // Atomik satın alma: bakiye düşer + hareket yazılır + tasarım teslim edilir. Aynı idemKey ikinci kez ücret almaz.
     buy: function (o) {
       var w = load();

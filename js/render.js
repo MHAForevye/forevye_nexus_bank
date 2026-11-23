@@ -3,6 +3,7 @@
   'use strict';
   var R = root.FNXRules;
   var W = R.CANVAS.width, H = R.CANVAS.height;
+  function useCanvas(d) { var c = R.canvasOf(d && d.orientation); W = c.width; H = c.height; return c; }
   var FONT = "Jost, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
 
   // Banka logosu ikonu (vektör). viewBox: 30 24 267 202
@@ -81,7 +82,42 @@
       var vb = ICON_VB;
       return '<g transform="scale(' + (100 / vb[2]) + ' ' + (100 / vb[3]) + ') translate(' + (-vb[0]) + ' ' + (-vb[1]) + ')">' +
         ICON.map(function (d) { return '<path d="' + d + '" ' + a + '/>'; }).join('') + '</g>';
-    }
+    },
+    // Kütüphanede listelenen tüm türlerin çizicileri bulunmalı; tek bir eksik tür editörü düşürmemeli.
+    diamond: function (a) { return '<path d="M50 2L98 50L50 98L2 50Z" ' + a + '/>'; },
+    rect: function (a) { return '<rect x="2" y="2" width="96" height="96" ' + a + '/>'; },
+    dots: function (a) {
+      var out = '';
+      for (var y = 10; y <= 90; y += 20) for (var x = 10; x <= 90; x += 20)
+        out += '<circle cx="' + x + '" cy="' + y + '" r="2.5" ' + a + '/>';
+      return out;
+    },
+    rings: function (a) {
+      return [12, 25, 38, 49].map(function (r) { return '<circle cx="50" cy="50" r="' + r + '" ' + a + '/>'; }).join('');
+    },
+    rays: function (a) {
+      var out = '';
+      for (var i = 0; i < 16; i++) {
+        var ang = i * Math.PI / 8, x1 = 50 + Math.cos(ang) * 12, y1 = 50 + Math.sin(ang) * 12;
+        var x2 = 50 + Math.cos(ang) * 49, y2 = 50 + Math.sin(ang) * 49;
+        out += '<path d="M' + x1.toFixed(2) + ' ' + y1.toFixed(2) + 'L' + x2.toFixed(2) + ' ' + y2.toFixed(2) + '" ' + a + '/>';
+      }
+      return out;
+    },
+    hexgrid: function (a) {
+      var out = '';
+      for (var row = -1; row <= 5; row++) for (var col = -1; col <= 5; col++) {
+        var cx = 10 + col * 20 + (row % 2 ? 10 : 0), cy = 10 + row * 17.32, pts = [];
+        for (var j = 0; j < 6; j++) {
+          var ang = Math.PI / 3 * j;
+          pts.push((cx + 9 * Math.cos(ang)).toFixed(2) + ',' + (cy + 9 * Math.sin(ang)).toFixed(2));
+        }
+        out += '<polygon points="' + pts.join(' ') + '" ' + a + '/>';
+      }
+      return out;
+    },
+    glow: function (a) { return '<circle cx="50" cy="50" r="48" ' + a + '/>'; },
+    beam: function (a) { return '<path d="M0 38Q50 18 100 38V62Q50 82 0 62Z" ' + a + '/>'; }
   };
 
   function shapeInner(kind, p) {
@@ -100,7 +136,12 @@
     if (kind === 'nexus') { stroke = 'none'; sw = 0; }
     var a = 'fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + (sw || 0) + '"' + extra +
       ' stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"';
-    return SHAPES[kind](a);
+    var draw = SHAPES[kind];
+    if (typeof draw !== 'function') {
+      // Bozuk/eski tasarım kaydı editörü çökertmemeli.
+      return '<rect x="2" y="2" width="96" height="96" rx="8" fill="none" stroke="#ff6b6b" stroke-width="3" stroke-dasharray="6 4"/>';
+    }
+    return draw(a);
   }
 
   function chipMarkup(style, x, y, w, h, P) {
@@ -159,7 +200,7 @@
       var qr = new root.FNXQRCode(0, (root.FNXQRErrorCorrectLevel || {}).M || 0);
       qr.addData('FNX1|' + String(cardToken));
       qr.make();
-      var n = qr.getModuleCount(), size = 104, quiet = 3, unit = size / (n + quiet * 2), x = 718, y = 354;
+      var n = qr.getModuleCount(), size = 104, quiet = 3, unit = size / (n + quiet * 2), x = H > W ? W - size - 32 : W - size - 34, y = H > W ? H - size - 190 : H - size - 82;
       var out = '<g data-sys="card-qr" aria-label="Kart QR kodu"><rect x="' + x + '" y="' + y + '" width="' + size + '" height="' + size + '" rx="5" fill="#fff"/>';
       for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) {
         if (qr.isDark(r, c)) out += '<rect x="' + (x + (c + quiet) * unit).toFixed(2) + '" y="' + (y + (r + quiet) * unit).toFixed(2) + '" width="' + (unit + 0.08).toFixed(2) + '" height="' + (unit + 0.08).toFixed(2) + '" fill="#101116"/>';
@@ -170,12 +211,14 @@
 
   function renderCard(d, sys, o) {
     o = o || {};
+    useCanvas(d);
+    var portrait = H > W;
     var P = o.prefix || 'c', t = tone(d), bg = bgLayer(d), bp = bg.properties;
     // Market kart yüzeyi (skin): takılıysa kullanıcının katmanları/yüzeyi yerine skin çizilir; yazı rengi skin'e kilitlenir.
     var sk = sys && sys.skin && root.FNXSkins ? root.FNXSkins.get(sys.skin) : null;
     var sp = sk ? sk.build(P, { animate: o.animate !== false, serial: sys.skinSerial ? String(sys.skinSerial).replace(/[^0-9\/]/g, '') : '' }) : null;
     if (sp) { t.brand = sk.brand; t.name = sk.brand; t.plate = false; t.nameFallback = false; }
-    var zonePath = 'M0 0H' + W + 'V' + H + 'H0Z' + R.ZONES.filter(function (z) { return !z.noclip; }).map(function (z) {
+    var zonePath = 'M0 0H' + W + 'V' + H + 'H0Z' + (portrait ? [] : R.ZONES.filter(function (z) { return !z.noclip; })).map(function (z) {
       return 'M' + z.x + ' ' + z.y + 'h' + z.w + 'v' + z.h + 'h' + (-z.w) + 'Z';
     }).join('');
     var chips = Object.keys(CHIP_STOPS).map(function (k) {
@@ -203,8 +246,8 @@
     if (fin) body += '<g pointer-events="none">' + fin + '</g>';
 
     // Sistem katmanları (Grup D): banka adı/logosu, çip, sistem bilgileri.
-    var ix = 52, iy = 46, ih = 66, iw = ih * ICON_VB[2] / ICON_VB[3];
-    var wh = 50, ww = wh * WORDMARK.ratio, wx = ix + iw + 24, wy = iy + (ih - wh) / 2;
+    var ix = portrait ? 32 : 52, iy = portrait ? 34 : 46, ih = portrait ? 54 : 66, iw = ih * ICON_VB[2] / ICON_VB[3];
+    var wh = portrait ? 40 : 50, ww = wh * WORDMARK.ratio, wx = ix + iw + 18, wy = iy + (ih - wh) / 2;
     var brand = '<g data-sys="brand">' +
       '<svg x="' + ix + '" y="' + iy + '" width="' + iw + '" height="' + ih + '" viewBox="' + ICON_VB.join(' ') + '" fill="' + t.brand + '">' +
       ICON.map(function (dd) { return '<path d="' + dd + '"/>'; }).join('') + '</svg>' +
@@ -212,23 +255,26 @@
       '<image href="' + WORDMARK.src + '" x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '"/></mask>' +
       '<rect x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '" fill="' + t.brand + '" mask="url(#' + P + 'wm)"/></g>';
     // Nexus'ta kart kimliği NXC-XXXX-XXXX biçimindedir (harf içerir): sys.last4 verilirse olduğu gibi gösterilir, yoksa kart numarasının son 4 hanesi.
-    var last4 = sys && sys.last4 ? String(sys.last4).replace(/[^A-Za-z0-9•]/g, '').slice(-4) : String((sys && sys.cardNumber) || '0000').replace(/\D/g, '').slice(-4);
+    var rawNumber = String((sys && sys.cardNumber) || '');
+    var cardNumber = rawNumber.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+    // Eski/eksik kayıtlarda da kart numarası alanı boş kalmasın.
+    if (!cardNumber) cardNumber = '•••• •••• •••• ' + String((sys && sys.last4) || '0000').slice(-4);
     var cardToken = sys && sys.cardToken ? String(sys.cardToken) : '';
-    var info = '<g data-sys="info"><path d="M748 62H800" stroke="' + t.brand + '" stroke-width="3.5" stroke-linecap="round" opacity=".9"/>' +
-      (cardToken ? '<text x="205" y="405" font-family="' + FONT + '" font-size="13" letter-spacing="2" fill="' + t.brand + '" opacity=".7">NEXUS KART KODU</text><text x="205" y="438" font-family="' + FONT + '" font-size="23" letter-spacing="1.5" font-weight="600" fill="' + t.brand + '">' + esc(cardToken) + '</text>' : '') +
-      '<text x="830" y="498" text-anchor="end" font-family="' + FONT + '" font-size="22" letter-spacing="3" fill="' + t.brand + '" opacity=".85">•••• ' + esc(last4) + '</text></g>';
+    var info = '<g data-sys="info">' +
+      (cardToken ? '<text x="' + (portrait ? 32 : 205) + '" y="' + (portrait ? 690 : 405) + '" font-family="' + FONT + '" font-size="13" letter-spacing="2" fill="' + t.brand + '" opacity=".7">NEXUS KART KODU</text><text x="' + (portrait ? 32 : 205) + '" y="' + (portrait ? 720 : 438) + '" font-family="' + FONT + '" font-size="23" letter-spacing="1.5" font-weight="600" fill="' + t.brand + '">' + esc(cardToken) + '</text>' : '') +
+      '<text x="' + (portrait ? 32 : 52) + '" y="' + (portrait ? 765 : 468) + '" font-family="' + FONT + '" font-size="' + (portrait ? 19 : 20) + '" letter-spacing="2" font-weight="500" fill="' + t.brand + '" opacity=".95">' + esc(cardNumber) + '</text></g>';
     // Hiçbir renk logoya yeterli kontrast veremiyorsa (ör. çok renkli/orta tonlu zemin) sistem, markanın arkasına kendi yarı saydam zeminini koyar.
-    if (t.plate) {
+    if (t.plate && !portrait) {
       var bz = R.ZONES.filter(function (z) { return z.id === 'brand'; })[0];
       body += '<rect data-sys="brand-plate" x="' + bz.x + '" y="' + (bz.y + 6) + '" width="' + (bz.w - 20) + '" height="' + (bz.h - 12) + '" rx="22" fill="' + (t.dark ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.6)') + '"/>';
     }
-    body += brand + chipMarkup((sp && sk.chip) || d.chipStyle || 'gold', 52, 176, 112, 88, P) + info + qrMarkup(cardToken, P);
+    body += brand + chipMarkup((sp && sk.chip) || d.chipStyle || 'gold', portrait ? W - 144 : 52, portrait ? 128 : 176, 112, 88, P) + info + qrMarkup(cardToken, P);
 
     // Kullanıcı adı (Grup E): yerleşimi sabit, boyutu otomatik sığdırılır.
     var nm = String(d.userDisplayName || '').toLocaleUpperCase('tr-TR');
     var len = Math.max(1, Array.from(nm).length);
-    var size = Math.min(30, R.NAME_AREA.w / (0.95 * len));
-    body += '<text data-id="name" x="52" y="488" font-family="' + FONT + '" font-weight="500" font-size="' + size.toFixed(1) +
+    var size = Math.min(30, (portrait ? W - 64 : R.NAME_AREA.w) / (0.95 * len));
+    body += '<text data-id="name" x="' + (portrait ? 32 : 52) + '" y="' + (portrait ? 824 : 510) + '" font-family="' + FONT + '" font-weight="500" font-size="' + size.toFixed(1) +
       '" letter-spacing="' + (size * 0.16).toFixed(1) + '" fill="' + t.name + '">' + esc(nm) + '</text>';
 
     var edge = '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="35" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="2" pointer-events="none"/>';
@@ -236,6 +282,7 @@
   }
 
   function cardSvg(d, sys, o) {
+    useCanvas(d);
     return '<svg class="card-svg" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Forevye Nexus sanal kartı">' +
       renderCard(d, sys, o) + '</svg>';
   }

@@ -91,3 +91,11 @@ Kart QR kodu ve tam sanal kart kodu önizlemesi için `js/qrcode.js` yerel olara
 
 ## Market bağlantısı (kart yüzeyleri, FN)
 `js/skins.js` market yüzeylerini tanımlar (`render.js` `sys.skin` ile çizer). `js/wallet.js` market ile ORTAK FN cüzdanıdır (aynı alan adında localStorage). Satın alınanlar **Kartım → Kart yüzeylerim**'de takılır. `config.js` → `MARKET_URL` marketin adresi olmalı. `skins.js` ve `wallet.js` marketteki `js/card/` kopyalarıyla BİREBİR aynı kalmalıdır; Nexus tarafında `GET /api/editor/card` yanıtına `owned_skins` eklenmelidir.
+
+
+## 23.11.2026 — Kart görünümü ve Nexus bağlantısı
+
+- Kart numarası kutusu 230×34 birime çıkarıldı; yatay varsayılan yerleşim alt sağda daha dengeli konuma alındı.
+- Kart numarası yazısı en çok 22 birime, Nexus kart kodu etiketi 15 ve kod satırı 25 birime kadar büyütüldü.
+- `js/rules.js` ve `js/render.js`, Worker deposundaki `shared/card-rules.js` ve `public/js/card-render.js` ile birebir eşit tutuldu.
+- Worker `wrangler.toml` içindeki `EDITOR_URL` ve `EDITOR_ORIGINS`, bu GitHub Pages adresine göre ayarlanmalıdır.

@@ -517,10 +517,11 @@
       const sys = Object.assign({}, E.system, { skin: item.id, skinProductId: item.productId, skinSerial: serial });
       const preview = X.cardSvg(E.design, sys, { prefix: 'mk' + item.id, animate: false, placeholder: true });
       const rarity = { common: 'Standart', rare: 'Nadir', epic: 'Destansı', legendary: 'Efsanevi', mythic: 'Mitik' }[item.rarity] || 'Özel';
-      const button = has
+      const equipButton = has
         ? `<button type="button" class="btn sm${active ? '' : ' primary'}" data-skin-product="${esc(item.productId)}">${active ? 'Takılı · Çıkar' : 'Kartıma uygula'}</button>`
-        : `<button type="button" class="btn sm" data-market-buy="${esc(item.productId)}">${Number(item.price).toLocaleString('tr-TR')} FN · Satın al</button>`;
-      return `<article class="market-skin${active ? ' on' : ''}"><div class="market-skin-art">${preview}</div><div class="market-skin-info"><div class="market-skin-title"><b>${esc(item.n)}</b><span>${rarity}</span></div><p>${esc(item.d)}</p><div class="market-skin-foot"><small>${has ? 'Koleksiyonunda' + (serial ? ' · Seri ' + esc(serial) : '') : 'Sınırlı edisyon · Tek satın alma hakkı'}</small>${button}</div></div></article>`;
+        : '';
+      const storeButton = `<button type="button" class="btn sm" data-market-see="${esc(item.productId)}">${has ? 'Mağazada gör' : 'Mağazada gör · ' + Number(item.price).toLocaleString('tr-TR') + ' FN'}</button>`;
+      return `<article class="market-skin${active ? ' on' : ''}"><div class="market-skin-art">${preview}</div><div class="market-skin-info"><div class="market-skin-title"><b>${esc(item.n)}</b><span>${rarity}</span></div><p>${esc(item.d)}</p><div class="market-skin-foot"><small>${has ? 'Koleksiyonunda' + (serial ? ' · Seri ' + esc(serial) : '') : 'Sınırlı edisyon · Tek satın alma hakkı'}</small><div class="market-skin-actions">${equipButton}${storeButton}</div></div></div></article>`;
     }).join('');
     return `<div class="market-panel-head"><div><h3 class="panel-h">Nexus Market · Premium kart yüzeyleri</h3><p class="muted">Tasarımını kartın üzerine uygula. Sahip olmadıkların için Market'e git; satın alma tamamlanınca bu editöre geri dönüp kullanabilirsin.</p></div><span class="market-count">${list.length} tasarım</span></div>` +
       (cards || '<p class="muted pad">Market kataloğu yüklenemedi.</p>') +
@@ -919,6 +920,7 @@
       else if (d.scolor) { snap(); E.design.sysStyle.color = d.scolor === 'auto' ? 'auto' : d.scolor.toUpperCase(); fullChanged(); }
       else if (d.skinProduct) selectMarketSkin(d.skinProduct);
       else if (d.marketBuy) openMarketProduct(d.marketBuy);
+      else if (d.marketSee) openMarketProduct(d.marketSee);
     });
     el.lib.addEventListener('input', e => { if (e.target.dataset.c === 'scustom') { snap('scol'); E.design.sysStyle.color = e.target.value.toUpperCase(); stageChanged(); } });
     el.tabs.addEventListener('click', e => { const b = e.target.closest('[data-ltab]'); if (b) { E.tab = b.dataset.ltab; renderLib(); } });

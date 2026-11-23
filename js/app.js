@@ -55,8 +55,9 @@
   }
 
   /* ---------- sayfalar ---------- */
-  const BALANCE = 12450; // örnek değer; gerçek bakiye sunucuda işlem kaydıyla tutulacak
-  const TX = [
+  const W = root.FNXWallet, marketUrl = () => String((root.FNX_CONFIG || {}).MARKET_URL || '').replace(/\/+$/, '');
+  // Bakiye ve hareketler market ile ortak FN cüzdanından gelir (sunucu bağlanınca Nexus'tan okunacak).
+  const TX_DEMO = [
     { t: 'Mağaza — Zırh paketi', a: -450, d: 'Bugün' },
     { t: 'Görev ödülü', a: 1200, d: 'Dün' },
     { t: 'Takas — eşya satışı', a: 320, d: '18 Kasım' },
@@ -67,6 +68,10 @@
     return `<div class="tilt" data-tilt>${X.cardSvg(design, sys, { prefix })}</div>`;
   }
 
+  function txList() {
+    const l = W.ledger().slice(0, 6).map(x => ({ t: 'Mağaza — ' + x.name, a: x.amount, d: new Date(x.at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) }));
+    return l.length ? l : TX_DEMO;
+  }
   function renderHome(ctx) {
     const name = titleCase(ctx.design.userDisplayName);
     return `<header class="page-h"><h1>Hoş geldin, ${esc(name)}</h1><p class="muted">Sanal hesabın aktif.</p></header>
@@ -77,18 +82,29 @@
       </section>
       <section class="panel balance">
         <p class="muted">Sanal bakiye</p>
-        <p class="amount">${fmt(BALANCE)} <span>FN</span></p>
+        <p class="amount">${fmt(W.balance())} <span>FN</span></p>
         <p class="note">Oyun içi para birimi FN ile gösterilir; gerçek para veya banka mevduatı değildir.</p>
-        <div class="row"><button class="btn" type="button" disabled>Gönder · yakında</button><button class="btn" type="button" disabled>Mağaza · yakında</button></div>
+        <div class="row"><button class="btn" type="button" disabled>Gönder · yakında</button>${marketUrl() ? `<a class="btn" href="${esc(marketUrl())}/">Mağaza</a>` : '<button class="btn" type="button" disabled>Mağaza</button>'}</div>
       </section>
       <section class="panel tx">
         <h2 class="panel-h">Son hareketler</h2>
-        <ul class="txlist">${TX.map(x => `<li><span><b>${esc(x.t)}</b><small>${x.d}</small></span><span class="${x.a < 0 ? 'neg' : 'pos'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))} FN</span></li>`).join('')}</ul>
-        <p class="note">Örnek veriler. Gerçek işlem kayıtları sanal ekonomi aşamasında sunucudan gelecek.</p>
+        <ul class="txlist">${txList().map(x => `<li><span><b>${esc(x.t)}</b><small>${x.d}</small></span><span class="${x.a < 0 ? 'neg' : 'pos'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))} FN</span></li>`).join('')}</ul>
+        <p class="note">Mağaza alışverişlerin burada görünür. Sunucu bağlanınca bakiye ve kayıtlar Nexus'tan gelecek.</p>
       </section>
     </div>`;
   }
 
+  // Kart yüzeyleri: market'ten satın alınanlar takılır; alınmamışlar kilitli görünür ve mağazaya götürür.
+  function skinsBlock() {
+    const eq = W.equipped(), mk = marketUrl();
+    const items = root.FNXSkins.list.map(s => {
+      const own = W.owns(s.id), prev = X.cardSvg(Object.assign({}, ctx.design), { last4: 'PREV', skin: s.id, skinSerial: '001/500' }, { prefix: 'sk' + s.id, animate: false });
+      const act = own ? `<button class="btn sm${eq === s.id ? '' : ' primary'}" type="button" data-skin="${eq === s.id ? '' : s.id}">${eq === s.id ? 'Çıkar' : 'Kartıma tak'}</button>`
+        : (mk ? `<a class="btn sm" href="${esc(mk)}/#/p/p_card_${s.id}">🔒 ${s.price} FN · Mağazada</a>` : `<span class="note">${s.price} FN</span>`);
+      return `<div class="skin${eq === s.id ? ' on' : ''}${own ? '' : ' locked'}">${prev}<b>${esc(s.n)}</b><small>${esc(s.d)}</small>${act}</div>`;
+    }).join('');
+    return `<section class="panel skins"><h2 class="panel-h">Kart yüzeylerim</h2><div class="skin-grid">${items}</div><p class="note">Yüzey takılıyken kart onunla çizilir; kendi tasarımın silinmez, yüzeyi çıkarınca geri gelir.</p></section>`;
+  }
   function renderCardPage(ctx) {
     const s = ctx.sys;
     return `<header class="page-h"><h1>Kartım</h1><p class="muted">Görünümü sen tasarlarsın; kimlik bilgilerini sistem belirler.</p></header>
@@ -106,7 +122,7 @@
         </dl>
         <p class="note">Bu alanlar sistem tarafından atanır ve kart editöründen değiştirilemez. Oyun içi temsili bilgilerdir; gerçek ödemede kullanılamaz.</p>
       </section>
-    </div>`;
+    </div>${skinsBlock()}`;
   }
   const maskNum = n => n.replace(/\d(?=.*\d{4}$)/g, '•');
 
@@ -117,12 +133,13 @@
   const PAGES = {
     home: renderHome, card: renderCardPage,
     activity: () => renderSoon('Hareketler', 'Bakiye ve satın alma hareketleri sanal ekonomi aşamasında burada listelenecek.'),
-    store: () => renderSoon('Mağaza', 'Oyun içi ürün kataloğu ve satın alma, sanal ekonomi aşamasında eklenecek.'),
+    store: () => renderSoon('Mağaza', 'Hazır kart tasarımları Nexus Market’te FN ile satılır; satın aldıkların kart editöründe Şablonlar sekmesinde açılır.').replace('<a class="btn" href="#/home">', (marketUrl() ? `<a class="btn primary" href="${esc(marketUrl())}/">Mağazaya git</a> ` : '') + '<a class="btn" href="#/home">'),
     settings: () => renderSoon('Ayarlar', 'Hesap, e-posta girişi ve güvenlik ayarları hesap aşamasında eklenecek.')
   };
 
   /* ---------- yönlendirme ---------- */
-  const ctx = { sys: null, design: null };
+  const ctx = { sys: null, base: null, design: null };
+  function withSkin(base) { const id = W.equipped(); return id ? Object.assign({}, base, { skin: id, skinSerial: '' }) : base; }
   function route() {
     const name = (location.hash || '#/home').replace(/^#\/?/, '').split('?')[0] || 'home';
     const app = $('#view-app'), ed = $('#view-editor');
@@ -130,7 +147,7 @@
       const saved = savedDesign();
       app.hidden = true; ed.hidden = false; document.body.classList.add('in-editor');
       root.FNXEditor.open({
-        saved, draft: draftDesign(saved), system: ctx.sys,
+        saved, draft: draftDesign(saved), system: ctx.base,
         onSave: d => { ctx.design = d; },
         onExit: () => { location.hash = '#/home'; }
       });
@@ -140,6 +157,7 @@
     ed.hidden = true; app.hidden = false; document.body.classList.remove('in-editor');
     const key = PAGES[name] ? name : 'home';
     ctx.design = savedDesign();
+    ctx.sys = withSkin(ctx.base);
     $('#page').innerHTML = PAGES[key](ctx);
     document.querySelectorAll('[data-route]').forEach(a => {
       if (a.dataset.route === key) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
@@ -159,6 +177,7 @@
       });
       t.addEventListener('pointerleave', () => { t.style.transform = ''; });
     });
+    document.querySelectorAll('[data-skin]').forEach(b => b.addEventListener('click', () => { W.equip(b.dataset.skin); route(); }));
     document.querySelectorAll('[data-reveal]').forEach(b => {
       let timer;
       b.addEventListener('click', () => {
@@ -184,6 +203,7 @@
   }
   function openConnected(payload) {
     const C = root.FNXConnect;
+    if (W) W.mergeOwned(payload.owned_skins);   // sunucu satın alınan yüzeyleri verirse Kartım'da açılır
     const isNew = !payload.card;
     const saved = isNew ? payload.base_design : payload.card.design;
     const tok = payload.card ? payload.card.card_token : '';
@@ -209,7 +229,7 @@
 
   function start() {
     if (root.FNXConnect && root.FNXConnect.enabled) return startConnected();
-    ctx.sys = systemRecord();
+    ctx.base = systemRecord(); ctx.sys = withSkin(ctx.base);
     $('#side-icon').innerHTML = X.iconSvg('');
     window.addEventListener('hashchange', route);
     route();

@@ -87,3 +87,7 @@ docs/             şartname PDF, seçilen logo/kart görseli
 
 
 Kart QR kodu ve tam sanal kart kodu önizlemesi için `js/qrcode.js` yerel olarak yüklenir. QR, yalnızca Nexus sanal kart kodunu taşır; fiziksel NFC veya gerçek ödeme kartı değildir.
+
+
+## Market bağlantısı (kart yüzeyleri, FN)
+`js/skins.js` market yüzeylerini tanımlar (`render.js` `sys.skin` ile çizer). `js/wallet.js` market ile ORTAK FN cüzdanıdır (aynı alan adında localStorage). Satın alınanlar **Kartım → Kart yüzeylerim**'de takılır. `config.js` → `MARKET_URL` marketin adresi olmalı. `skins.js` ve `wallet.js` marketteki `js/card/` kopyalarıyla BİREBİR aynı kalmalıdır; Nexus tarafında `GET /api/editor/card` yanıtına `owned_skins` eklenmelidir.

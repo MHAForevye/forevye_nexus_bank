@@ -35,16 +35,37 @@
     });
   }
 
+  // İstek: 20 sn zaman aşımı (asılı kalmasın); yalnızca GET'te ağ hatasında bir kez daha dener (PUT/POST tekrarlanmaz).
   function call(method, path, token, body) {
     var h = {}; if (body !== undefined) h['content-type'] = 'application/json'; if (token) h.authorization = 'Bearer ' + token;
-    return fetch(NEXUS + path, { method: method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit' })
+    function once() {
+      var ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : 0;
+      return fetch(NEXUS + path, { method: method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit', cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { if (timer) clearTimeout(timer); return r; }, function (er) { if (timer) clearTimeout(timer); throw er; });
+    }
+    return once()
+      .catch(function (oe) { return method === 'GET' ? new Promise(function (r) { setTimeout(r, 1200); }).then(once) : Promise.reject(oe); })
       .catch(function (oe) { return unreachable(oe).then(function (e) { throw e; }); })
       .then(function (res) {
         return res.json().catch(function () { return null; }).then(function (d) {
-          if (!res.ok) { var er = (d && d.error) || {}; var e = new Error(er.message || 'İşlem tamamlanamadı.'); e.status = res.status; e.code = er.code; e.errors = er.errors; throw e; }
+          if (!res.ok) {
+            var er = (d && d.error) || {}; var e = new Error(er.message || 'İşlem tamamlanamadı.'); e.status = res.status; e.code = er.code; e.errors = er.errors;
+            if (res.status === 401 && S.token) { e.expired = true; e.message = 'Editör oturumu doldu. Taslağın bu cihazda korunuyor; Nexus’ta “Kartını tasarla”ya basıp yeniden aç, kaldığın yerden devam edersin.'; }
+            throw e;
+          }
           return d;
         });
       });
+  }
+
+  // Editör açıkken jetonun boşta kalıp düşmemesi için arada sunucuya "buradayım" der (sunucu jetonu kaydırır).
+  var pingTimer = 0;
+  function ping() { if (!S.token || document.hidden) return; call('GET', '/api/editor/card', S.token).catch(function () { /* kaydetme anında hata gösterilir */ }); }
+  function keepAlive() {
+    if (pingTimer) return;
+    pingTimer = setInterval(ping, 4 * 60 * 1000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) ping(); });
+    window.addEventListener('online', ping);
   }
 
   // Nexus'ta giriş + bilet için gidilecek adres (kart varsa o kartın editörü, yoksa yeni kart).
@@ -67,7 +88,7 @@
       })();
     return start.then(function (d) {
       if (!d) return { state: 'gate' };
-      S.payload = d; return { state: 'ready', payload: d };
+      S.payload = d; keepAlive(); return { state: 'ready', payload: d };
     }).catch(function (e) { return { state: 'error', message: e.message, offline: !!e.offline }; });
   }
 

@@ -776,7 +776,7 @@
       try { final = (await E.opts.persist(out)) || out; }
       catch (e) {
         E.errors = e.errors && e.errors.length ? e.errors : [e.message || 'Kaydedilemedi.']; renderMsg();
-        setStatus('error', e.offline ? 'Bağlantı yok — taslak bu cihazda korunuyor' : 'Kaydedilemedi'); return;
+        setStatus('error', e.offline ? 'Bağlantı yok — taslak bu cihazda korunuyor' : e.expired ? 'Oturum doldu — taslak korunuyor, Nexus’tan yeniden aç' : 'Kaydedilemedi'); return;
       } finally { saving = false; $('#ed-save').disabled = false; }
       if (E.opts) E.opts.isNew = false;
     } else {

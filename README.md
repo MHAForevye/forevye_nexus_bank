@@ -99,3 +99,6 @@ Kart QR kodu ve tam sanal kart kodu önizlemesi için `js/qrcode.js` yerel olara
 - Kart numarası yazısı en çok 22 birime, Nexus kart kodu etiketi 15 ve kod satırı 25 birime kadar büyütüldü.
 - `js/rules.js` ve `js/render.js`, Worker deposundaki `shared/card-rules.js` ve `public/js/card-render.js` ile birebir eşit tutuldu.
 - Worker `wrangler.toml` içindeki `EDITOR_URL` ve `EDITOR_ORIGINS`, bu GitHub Pages adresine göre ayarlanmalıdır.
+
+## 23 Kasım 2026 — kart çizim düzeltmesi
+Dikey/yatay SVG ölçüsü tasarım yönüne göre belirlenir. Sistem alanları `design.sys` koordinat ve ölçeklerini kullanır; kart kodu, maskeli numara, kart sahibi ve QR ayrı ayrı çizilir. Şekil/desen/ışık kütüphanesindeki 22 türün SVG çizicisi tamamlandı. Worker ile ortak `rules` ve `render` dosyaları eşitlendi.

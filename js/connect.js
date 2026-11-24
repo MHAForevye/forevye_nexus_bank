@@ -109,5 +109,34 @@
     location.href = NEXUS + (S.returnPath || (id ? '/#/cards/' + id : '/#/cards'));
   }
 
-  root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, persist: persist, marketTicket: marketTicket, exit: exit, launchUrl: launchUrl, state: S };
+
+  // Banka uygulaması için ayrı, tek kullanımlık giriş bileti ve sınırlı süreli API oturumu.
+  function bankCall(method, path, token, body) {
+    var headers = { authorization: 'Bearer ' + token };
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    return fetch(NEXUS + path, { method: method, headers: headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit', cache: 'no-store' })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (d) { if (!r.ok) { var e = new Error(d && d.error && d.error.message || 'İstek tamamlanamadı.'); e.status = r.status; throw e; } return d; }); });
+  }
+  function bankBoot() {
+    var m = /(?:^|[#&])bank=([A-Za-z0-9_-]{20,80})/.exec(location.hash || '');
+    if (!m) {
+      var saved = ''; try { saved = sessionStorage.getItem('fnx.bank.session') || ''; } catch (e) {}
+      if (!saved) return Promise.resolve({ state: 'gate' });
+      S.bankToken = saved; return bankCall('GET', '/api/me', saved).then(function (me) { return { state: 'ready', token: saved, me: me }; }).catch(function () { try { sessionStorage.removeItem('fnx.bank.session'); } catch (e) {} return { state: 'gate' }; });
+    }
+    history.replaceState(null, '', location.pathname + location.search);
+    return bankCall('POST', '/api/bank/exchange', '', { ticket: m[1] }).then(function (d) {
+      S.bankToken = d.token;
+      try { sessionStorage.setItem('fnx.bank.session', d.token); } catch (e) {}
+      return bankCall('GET', '/api/me', d.token).then(function (me) { return { state: 'ready', token: d.token, me: me }; });
+    }).catch(function (e) { return { state: 'error', message: e.message }; });
+  }
+  function bankRequest(method, path, body) {
+    var tok = S.bankToken;
+    if (!tok) { try { tok = sessionStorage.getItem('fnx.bank.session') || ''; } catch (e) {} }
+    if (!tok) return Promise.reject(new Error('Banka oturumu bulunamadı. Nexus hesabından yeniden açın.'));
+    S.bankToken = tok; return bankCall(method, path, tok, body);
+  }
+
+  root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, bankBoot: bankBoot, bankRequest: bankRequest, persist: persist, marketTicket: marketTicket, exit: exit, launchUrl: launchUrl, state: S };
 })(window);

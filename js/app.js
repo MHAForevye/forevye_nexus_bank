@@ -203,6 +203,7 @@
   }
   function openConnected(payload) {
     const C = root.FNXConnect;
+    document.body.classList.remove('in-bank');
     if (W) W.mergeOwned(payload.owned_skins);   // sunucu satın alınan yüzeyleri verirse Kartım'da açılır
     const isNew = !payload.card;
     const saved = isNew ? payload.base_design : payload.card.design;
@@ -225,10 +226,11 @@
   function startConnected() {
     const C = root.FNXConnect;
     $('#side-icon').innerHTML = X.iconSvg('');
-    C.boot().then(r => {
-      if (r.state === 'ready') return openConnected(r.payload);
-      if (r.state === 'error') return showGate('Editör açılamadı', r.message, 'Nexus\'a dön ve yeniden aç', C.launchUrl(), !!r.offline);
-      showGate('Kart editörü', 'Kartını tasarlamak için önce Nexus\'ta giriş yapmalısın.', 'Nexus\'ta giriş yap', C.launchUrl());
+    C.bankBoot().then(r => {
+      if (r.state === 'ready') return root.FNXBankUI.start(r);
+      if (location.hash.includes('t=')) return C.boot().then(er => { if (er.state === 'ready') return openConnected(er.payload); showGate('Kart editörü', er.message || 'Nexus oturumu gerekli.', "Nexus’a dön", C.launchUrl(), !!er.offline); });
+      if (r.state === 'error') return showGate('Sanal Banka açılamadı', r.message, 'Nexus’a dön', C.nexusUrl, true);
+      showGate('Sanal Banka', 'Banka hesabına erişmek için Nexus ana menüsünden Sanal Banka bağlantısını açmalısın.', 'Nexus’a git', C.nexusUrl);
     });
   }
 

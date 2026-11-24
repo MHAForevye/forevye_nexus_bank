@@ -102,3 +102,13 @@ Kart QR kodu ve tam sanal kart kodu önizlemesi için `js/qrcode.js` yerel olara
 
 ## 23 Kasım 2026 — kart çizim düzeltmesi
 Dikey/yatay SVG ölçüsü tasarım yönüne göre belirlenir. Sistem alanları `design.sys` koordinat ve ölçeklerini kullanır; kart kodu, maskeli numara, kart sahibi ve QR ayrı ayrı çizilir. Şekil/desen/ışık kütüphanesindeki 22 türün SVG çizicisi tamamlandı. Worker ile ortak `rules` ve `render` dosyaları eşitlendi.
+
+## 280 kart koleksiyonu
+
+Editörün `js/skins.js` dosyası 280 koleksiyon yüzeyini de içerir. Her yüzeyin kendi koleksiyon paleti/motifi vardır; dikey ve yatay tuval ölçüleri renderer'a aktarılır. Ürün yönüyle eşleşmeyen karta yüzey takılması Worker tarafında reddedilir. Nihai karakter illüstrasyonu ve resmî kulüp armaları henüz kaynak katalogdaki varlık durumuna tabidir; prosedürel yüzeyler bunların yerine geçmez.
+
+## V6 banka ekranı
+
+Banka uygulaması artık Nexus ana menüsünden `Sanal Banka` bağlantısıyla tek kullanımlık `bank=` bileti üzerinden açılır. Banka ana sayfası FN ve kristal bakiyesini sunucudan okur; Kristal Cüzdanı, Hareketler, Başarımlar, Bildirimler ve Market sekmeleri içerir. Market geçişi banka jetonundan ayrı Market bileti üretir. Doğrudan sayfa adresiyle oturum açılmaz; Nexus üzerinden geçiş gerekir.
+
+Yeni ödüller: hesap açılışı 20 kristal, ilk kart tasarımını kaydetme 10 kristal, ilk Market harcaması 10 kristal. Transfer açıklaması en fazla 180 karakterdir ve iki tarafın hareketlerinde/bildirimlerinde görünür.

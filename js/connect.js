@@ -1,20 +1,12 @@
-/* Nexus bağlantısı. Giriş burada yapılmaz: kullanıcı Nexus'ta (FOREVYE ID ile) giriş yapar, Nexus tek kullanımlık bir bilet verir ve
-   buraya `#t=<bilet>` ile gönderir. Bilet jetona çevrilir (sunucuya yalnızca bu istek gider; adres çubuğundan hemen silinir).
-   Jeton yalnızca bu sekmenin sessionStorage'ında durur ve yalnızca kart editörü uçlarında geçerlidir. */
+/* Nexus bağlantısı. Giriş burada yapılmaz: kullanıcı Nexus'ta (FOREVYE ID ile) giriş yapar ve tek kullanımlık biletle buraya döner. */
 (function (root) {
   'use strict';
   var CFG = root.FNX_CONFIG || {};
   var NEXUS = String(CFG.NEXUS_URL || '').replace(/\/+$/, '');
   var KEY = 'fnx.session';
-  var PEND = 'fnx.ticket';   // sunucuya hiç ulaşılamadıysa bilet (5 dk, tek kullanımlık) yalnızca bu sekmede "Tekrar dene" için saklanır
+  var PEND = 'fnx.ticket';
   var S = { token: '', payload: null, returnPath: '' };
-
   function ss(op, v, key) { key = key || KEY; try { if (op === 'get') return sessionStorage.getItem(key); if (op === 'set') sessionStorage.setItem(key, v); else sessionStorage.removeItem(key); } catch (e) {} return null; }
-
-  // fetch hiç yanıt alamadığında nedeni ayırır (üç ayrı yoklama):
-  //  1) CORS'lu GET /api/editor/card (jetonsuz → 401 beklenir): yanıt gelirse Nexus ayakta ve CORS izni TAMAM.
-  //  2) no-cors GET /api/market: yanıt "çözülürse" Nexus ayakta ama tarayıcı yanıtı (CORS) engelliyor.
-  //  3) ikisi de olmazsa gerçekten ulaşılamıyor (adres/ağ/engelleyici eklenti).
   function probe(url, opts) {
     var ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = ctl ? setTimeout(function () { ctl.abort(); }, 8000) : 0;
     opts.signal = ctl ? ctl.signal : undefined; opts.cache = 'no-store'; opts.credentials = 'omit';
@@ -34,8 +26,6 @@
       var e = new Error(msg); e.offline = true; e.reason = r.reason; return e;
     });
   }
-
-  // İstek: 20 sn zaman aşımı (asılı kalmasın); yalnızca GET'te ağ hatasında bir kez daha dener (PUT/POST tekrarlanmaz).
   function call(method, path, token, body) {
     var h = {}; if (body !== undefined) h['content-type'] = 'application/json'; if (token) h.authorization = 'Bearer ' + token;
     function once() {
@@ -57,28 +47,22 @@
         });
       });
   }
-
-  // Editör açıkken jetonun boşta kalıp düşmemesi için arada sunucuya "buradayım" der (sunucu jetonu kaydırır).
   var pingTimer = 0;
-  function ping() { if (!S.token || document.hidden) return; call('GET', '/api/editor/card', S.token).catch(function () { /* kaydetme anında hata gösterilir */ }); }
+  function ping() { if (!S.token || document.hidden) return; call('GET', '/api/editor/card', S.token).catch(function () {}); }
   function keepAlive() {
     if (pingTimer) return;
     pingTimer = setInterval(ping, 4 * 60 * 1000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) ping(); });
     window.addEventListener('online', ping);
   }
-
-  // Nexus'ta giriş + bilet için gidilecek adres (kart varsa o kartın editörü, yoksa yeni kart).
   function launchUrl() {
     var id = S.payload && S.payload.card && S.payload.card.id;
     return NEXUS + '/#/editor-launch/' + (id || 'new');
   }
-
-  // Sonuç: { state: 'ready', payload } | { state: 'gate' } | { state: 'error', message }
   function boot() {
     var m = /(?:^|[#&])t=([A-Za-z0-9_-]{20,80})/.exec(location.hash || '');
-    if (m) history.replaceState(null, '', location.pathname + location.search);   // bilet adres çubuğunda/geçmişte kalmasın
-    var ticket = m ? m[1] : ss('get', null, PEND);   // adres çubuğundaki bilet, yoksa daha önce ulaşılamadığı için saklanan bilet
+    if (m) history.replaceState(null, '', location.pathname + location.search);
+    var ticket = m ? m[1] : ss('get', null, PEND);
     var start = ticket
       ? call('POST', '/api/editor/exchange', '', { ticket: ticket }).then(function (d) { ss('del', null, PEND); S.token = d.token; ss('set', d.token); return d; },
         function (e) { if (e.offline) ss('set', ticket, PEND); else ss('del', null, PEND); throw e; })
@@ -91,45 +75,78 @@
       S.payload = d; keepAlive(); return { state: 'ready', payload: d };
     }).catch(function (e) { return { state: 'error', message: e.message, offline: !!e.offline }; });
   }
-
-  // Tasarımı Nexus'a kaydeder. Sunucunun doğrulayıp yeniden kurduğu tasarımı döner (sürümü sunucu yazar).
   function persist(design, skinProductId) {
     return call('PUT', '/api/editor/card', S.token, { design: design, skin_product_id: skinProductId || null }).then(function (r) {
       S.payload.card = r.card; S.payload.mode = 'edit'; S.payload.equipped_skin = r.skin || null; S.returnPath = r.return_path || '';
       return r.card.design;
     });
   }
-
   function marketTicket(productId) {
     return call('POST', '/api/editor/shop-ticket', S.token, { product_id: productId || null }).then(function (r) { return r.url; });
   }
-
   function exit() {
     var id = S.payload && S.payload.card && S.payload.card.id;
     location.href = NEXUS + (S.returnPath || (id ? '/#/cards/' + id : '/#/cards'));
   }
 
-
-  // Banka uygulaması için ayrı, tek kullanımlık giriş bileti ve sınırlı süreli API oturumu.
+  // Banka istekleri: zaman aşımı var; GET tekrar denenebilir, tek kullanımlık bilet POST'u asla otomatik tekrarlanmaz.
   function bankCall(method, path, token, body) {
-    var headers = { authorization: 'Bearer ' + token };
+    var headers = {};
+    if (token) headers.authorization = 'Bearer ' + token;
     if (body !== undefined) headers['content-type'] = 'application/json';
-    return fetch(NEXUS + path, { method: method, headers: headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit', cache: 'no-store' })
-      .then(function (r) { return r.json().catch(function () { return null; }).then(function (d) { if (!r.ok) { var e = new Error(d && d.error && d.error.message || 'İstek tamamlanamadı.'); e.status = r.status; throw e; } return d; }); });
+    function once() {
+      var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = ctl ? setTimeout(function () { ctl.abort(); }, 12000) : 0;
+      return fetch(NEXUS + path, { method: method, headers: headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit', cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { if (timer) clearTimeout(timer); return r; }, function (e) { if (timer) clearTimeout(timer); throw e; });
+    }
+    return once().catch(function (e) {
+      if (method !== 'GET') {
+        if (e && e.name === 'AbortError') throw new Error('Banka giriş bileti isteği 12 saniyede yanıt vermedi. Güvenlik için aynı bilet tekrar gönderilmedi; Nexus’tan yeni Banka bağlantısı aç.');
+        throw new Error('Banka sunucusuna ulaşılamadı. Nexus bağlantısını ve ağı kontrol edip yeniden dene.');
+      }
+      return new Promise(function (resolve) { setTimeout(resolve, 900); }).then(once);
+    }).catch(function (e) {
+      if (e && e.name === 'AbortError') throw new Error('Banka sunucusu 12 saniyede yanıt vermedi. Oturum silinmedi; Tekrar dene.');
+      throw e;
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (d) {
+        if (!res.ok) {
+          var err = (d && d.error) || {}, e = new Error(err.message || 'Banka isteği tamamlanamadı.');
+          e.status = res.status; e.code = err.code; throw e;
+        }
+        return d;
+      });
+    });
   }
   function bankBoot() {
     var m = /(?:^|[#&])bank=([A-Za-z0-9_-]{20,80})/.exec(location.hash || '');
     if (!m) {
       var saved = ''; try { saved = sessionStorage.getItem('fnx.bank.session') || ''; } catch (e) {}
       if (!saved) return Promise.resolve({ state: 'gate' });
-      S.bankToken = saved; return bankCall('GET', '/api/me', saved).then(function (me) { return { state: 'ready', token: saved, me: me }; }).catch(function () { try { sessionStorage.removeItem('fnx.bank.session'); } catch (e) {} return { state: 'gate' }; });
+      S.bankToken = saved;
+      return bankCall('GET', '/api/me', saved).then(function (me) { return { state: 'ready', token: saved, me: me }; }).catch(function (e) {
+        // Yalnızca gerçekten geçersiz/sona ermiş jetonu sil. Ağ ve sunucu hatasında oturumu koru;
+        // önceki sürüm her hatada token'ı siliyordu ve geçici bağlantı sorunu giriş döngüsü yaratabiliyordu.
+        if (e.status === 401) {
+          try { sessionStorage.removeItem('fnx.bank.session'); } catch (x) {}
+          S.bankToken = '';
+          return { state: 'gate' };
+        }
+        return { state: 'error', message: e.message || 'Banka sunucusuna ulaşılamadı.' };
+      });
     }
     history.replaceState(null, '', location.pathname + location.search);
     return bankCall('POST', '/api/bank/exchange', '', { ticket: m[1] }).then(function (d) {
       S.bankToken = d.token;
       try { sessionStorage.setItem('fnx.bank.session', d.token); } catch (e) {}
-      return bankCall('GET', '/api/me', d.token).then(function (me) { return { state: 'ready', token: d.token, me: me }; });
-    }).catch(function (e) { return { state: 'error', message: e.message }; });
+      return bankCall('GET', '/api/me', d.token).then(function (me) { return { state: 'ready', token: d.token, me: me }; }).catch(function (e) {
+        if (e.status === 401) { try { sessionStorage.removeItem('fnx.bank.session'); } catch (x) {} S.bankToken = ''; }
+        throw e;
+      });
+    }).catch(function (e) {
+      return { state: 'error', message: e.message || 'Banka girişi tamamlanamadı. Nexus’tan yeni bir bağlantı aç.' };
+    });
   }
   function bankRequest(method, path, body) {
     var tok = S.bankToken;
@@ -137,6 +154,5 @@
     if (!tok) return Promise.reject(new Error('Banka oturumu bulunamadı. Nexus hesabından yeniden açın.'));
     S.bankToken = tok; return bankCall(method, path, tok, body);
   }
-
   root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, bankBoot: bankBoot, bankRequest: bankRequest, persist: persist, marketTicket: marketTicket, exit: exit, launchUrl: launchUrl, state: S };
 })(window);

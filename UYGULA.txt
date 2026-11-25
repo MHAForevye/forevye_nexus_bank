@@ -1,0 +1,4 @@
+BANKA YAMASI v3 (v2'nin yerine geçer: "‹ Nexus'a dön" düğmesi + borsa düzeltmesi)
+- Kristal cüzdanındaki "Kristal borsasını aç" artık Nexus'un Borsa ekranına gider (Market sitesine DEĞİL).
+- Nexus Borsa ekranındaki "Kristal cüzdanı (Sanal Banka)" butonuyla banka doğrudan Kristal cüzdanı sekmesinde açılır.
+Dosyaları forevye_nexus_bank deposunun köküne AYNI YOL ile üzerine yaz: index.html, css/style.css, js/bank-ui.js, js/connect.js. Commit et. Sonra Ctrl+Shift+R.

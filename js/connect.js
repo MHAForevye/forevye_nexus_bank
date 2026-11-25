@@ -121,6 +121,9 @@
   }
   function bankBoot() {
     var m = /(?:^|[#&])bank=([A-Za-z0-9_-]{20,80})/.exec(location.hash || '');
+    // Nexus (ör. Borsa ekranı) bankayı belirli bir sekmede açabilir: #bank=<bilet>&r=wallet
+    var rm = /(?:^|[#&])r=([a-z]{3,20})/.exec(location.hash || '');
+    S.bankRoute = rm ? rm[1] : '';
     if (!m) {
       var saved = ''; try { saved = sessionStorage.getItem('fnx.bank.session') || ''; } catch (e) {}
       if (!saved) return Promise.resolve({ state: 'gate' });

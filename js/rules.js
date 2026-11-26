@@ -197,6 +197,7 @@
       sysStyle: { color: 'auto' },
       chipStyle: 'gold',
       qrStyle: 'tint',
+      qrVisible: d.qrVisible !== false,
       sys: {},
       version: Math.max(1, Math.floor(num(d.version, 1, 1e9, 1)))
     };

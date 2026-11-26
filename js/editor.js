@@ -553,8 +553,8 @@
 
   function sysTabHtml() {
     return '<h3 class="panel-h">EMV çip</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>' +
-      '<h3 class="panel-h">QR kod</h3>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
-      '<p class="muted pad">“Gizli simge” kartta yalnızca küçük bir QR simgesi gösterir; simgeye tıklayınca QR büyütülerek ayrı pencerede açılır (Kartlarım’da).</p>' +
+      '<h3 class="panel-h">QR kod</h3>' + '<div class="seg"><button type="button" data-qrvisible="on" aria-pressed="' + (E.design.qrVisible !== false) + '">QR açık</button><button type="button" data-qrvisible="off" aria-pressed="' + (E.design.qrVisible === false) + '">QR kapalı</button></div>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') + '<h3 class="panel-h">QR konumu</h3><div class="seg"><button type="button" data-qrlayout="top">Başta</button><button type="button" data-qrlayout="center">Ortada</button><button type="button" data-qrlayout="bottom">Altta</button></div>' +
+      '<p class="muted pad">QR konumunu hazır yerleşimlerden seçebilir veya kart üzerinde sürükleyerek ince ayar yapabilirsin.</p>' +
       '<h3 class="panel-h">Sistem yazı rengi</h3>' + sysColorHtml() +
       '<p class="muted pad">Çip, logo, ad, numara, kod ve QR sistem öğeleridir: silinemez, gizlenemez, dekoratif katmanların arkasına alınamaz. Konumlarını ve boyutlarını sahnede seçerek değiştirebilirsin.</p>';
   }
@@ -590,8 +590,7 @@
     if (k === 'name') h += nameColorHtml();
     if (k === 'brand' || k === 'code' || k === 'number') h += '<h3 class="panel-h">Yazı rengi</h3>' + sysColorHtml();
     if (k === 'chip') h += '<h3 class="panel-h">Çip görünümü</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>';
-    if (k === 'qr') h += '<h3 class="panel-h">Görünüm</h3>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
-      '<div class="row"><button type="button" class="btn sm" data-qrbig="1">QR\'yi büyüt</button></div><p class="muted pad">QR yalnızca sanal kart kimliğini taşır; taranabilirliği korunur.</p>';
+    if (k === 'qr') h += '<h3 class="panel-h">QR ayarları</h3><div class="seg"><button type="button" data-qrvisible="on">QR açık</button><button type="button" data-qrvisible="off">QR kapalı</button></div>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') + '<h3 class="panel-h">Konum</h3><div class="seg"><button type="button" data-qrlayout="top">Başta</button><button type="button" data-qrlayout="center">Ortada</button><button type="button" data-qrlayout="bottom">Altta</button></div><div class="row"><button type="button" class="btn sm" data-qrbig="1">QR\'yi büyüt</button></div><p class="muted pad">QR yalnızca sanal kart kimliğini taşır; taranabilirliği korunur.</p>';
     return h;
   }
   function nameColorHtml() {
@@ -727,6 +726,8 @@
     if (d.scolor) { snap(); E.design.sysStyle.color = d.scolor === 'auto' ? 'auto' : d.scolor.toUpperCase(); fullChanged(); return; }
     if (d.chip) { snap(); E.design.chipStyle = d.chip; fullChanged(); return; }
     if (d.qrstyle) { setQrStyle(d.qrstyle); return; }
+    if (d.qrvisible) { snap(); E.design.qrVisible = d.qrvisible === 'on'; fullChanged(); return; }
+    if (d.qrlayout) { snap(); const cv = R.canvasOf(E.design.orientation), q = E.design.sys.qr; if (d.qrlayout === 'top') { q.x = cv.width - 110; q.y = 42; } else if (d.qrlayout === 'center') { q.x = Math.round((cv.width - R.sysDims('qr', E.design.qrStyle).w*q.scale)/2); q.y = Math.round((cv.height - R.sysDims('qr', E.design.qrStyle).h*q.scale)/2); } else { q.x = cv.width - 110; q.y = cv.height - 110; } E.design.qrVisible = true; fullChanged(); return; }
     if (d.qrbig) { openQr(); return; }
     if (d.sysreset) { const k = selSys(), df = R.sysDefaults(E.design.orientation)[k], ok = trySys(k, df); snap(); E.design.sys[k] = ok || R.sysFix(k, df, E.design.orientation, E.design.qrStyle); fullChanged(); return; }
     if (E.sel === 'bg') {

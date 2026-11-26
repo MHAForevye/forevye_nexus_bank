@@ -234,7 +234,7 @@
     if (t.plate) {
       body += '<rect data-sys="brand-plate" x="' + bp0.x + '" y="' + (bp0.y - 4) + '" width="' + (brandW + 8) + '" height="' + (brandH + 8) + '" rx="18" fill="' + (t.dark ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.6)') + '"/>';
     }
-    body += brand + chipMarkup((sp && sk.chip) || d.chipStyle || 'gold', cp0.x, cp0.y, 100 * cp0.s, 78 * cp0.s, P) + info + qrMarkup(cardToken, P, qr0.x, qr0.y, R.sysDims('qr', d.qrStyle).w * qr0.s);
+    body += brand + chipMarkup((sp && sk.chip) || d.chipStyle || 'gold', cp0.x, cp0.y, 100 * cp0.s, 78 * cp0.s, P) + info + (d.qrVisible === false ? '' : qrMarkup(cardToken, P, qr0.x, qr0.y, R.sysDims('qr', d.qrStyle).w * qr0.s));
 
     // Kart sahibi adı: editördeki sistem kutusu koordinatlarını kullanır.
     var nm = String(d.userDisplayName || '').toLocaleUpperCase('tr-TR');

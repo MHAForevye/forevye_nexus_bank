@@ -553,8 +553,8 @@
 
   function sysTabHtml() {
     return '<h3 class="panel-h">EMV çip</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>' +
-      '<h3 class="panel-h">QR kod</h3>' + '<div class="seg"><button type="button" data-qrvisible="on" aria-pressed="' + (E.design.qrVisible !== false) + '">QR açık</button><button type="button" data-qrvisible="off" aria-pressed="' + (E.design.qrVisible === false) + '">QR kapalı</button></div>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') + '<h3 class="panel-h">QR konumu</h3><div class="seg"><button type="button" data-qrlayout="top">Başta</button><button type="button" data-qrlayout="center">Ortada</button><button type="button" data-qrlayout="bottom">Altta</button></div>' +
-      '<p class="muted pad">QR konumunu hazır yerleşimlerden seçebilir veya kart üzerinde sürükleyerek ince ayar yapabilirsin.</p>' +
+      '<h3 class="panel-h">QR kod</h3>' + '<div class="row"><button type="button" class="btn sm" data-qrtoggle="1">QR ' + (E.design.qrEnabled === false ? 'Aç' : 'Kapat') + '</button></div>' + '<div class="row wrap"><button type="button" class="btn sm" data-qrplace="start">Başta</button><button type="button" class="btn sm" data-qrplace="middle">Ortada</button><button type="button" class="btn sm" data-qrplace="end">Sonda</button><button type="button" class="btn sm" data-qrplace="bottom">Altta</button></div>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
+      '<p class="muted pad">“Gizli simge” kartta yalnızca küçük bir QR simgesi gösterir; simgeye tıklayınca QR büyütülerek ayrı pencerede açılır (Kartlarım’da).</p>' +
       '<h3 class="panel-h">Sistem yazı rengi</h3>' + sysColorHtml() +
       '<p class="muted pad">Çip, logo, ad, numara, kod ve QR sistem öğeleridir: silinemez, gizlenemez, dekoratif katmanların arkasına alınamaz. Konumlarını ve boyutlarını sahnede seçerek değiştirebilirsin.</p>';
   }
@@ -590,7 +590,8 @@
     if (k === 'name') h += nameColorHtml();
     if (k === 'brand' || k === 'code' || k === 'number') h += '<h3 class="panel-h">Yazı rengi</h3>' + sysColorHtml();
     if (k === 'chip') h += '<h3 class="panel-h">Çip görünümü</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>';
-    if (k === 'qr') h += '<h3 class="panel-h">QR ayarları</h3><div class="seg"><button type="button" data-qrvisible="on">QR açık</button><button type="button" data-qrvisible="off">QR kapalı</button></div>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') + '<h3 class="panel-h">Konum</h3><div class="seg"><button type="button" data-qrlayout="top">Başta</button><button type="button" data-qrlayout="center">Ortada</button><button type="button" data-qrlayout="bottom">Altta</button></div><div class="row"><button type="button" class="btn sm" data-qrbig="1">QR\'yi büyüt</button></div><p class="muted pad">QR yalnızca sanal kart kimliğini taşır; taranabilirliği korunur.</p>';
+    if (k === 'qr') h += '<h3 class="panel-h">Görünüm</h3>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
+      '<div class="row"><button type="button" class="btn sm" data-qrbig="1">QR\'yi büyüt</button></div><p class="muted pad">QR yalnızca sanal kart kimliğini taşır; taranabilirliği korunur.</p>';
     return h;
   }
   function nameColorHtml() {
@@ -719,6 +720,19 @@
     if (q) E.design.sys.qr = q; else { E.design.sys.qr = R.sysFix('qr', R.sysDefaults(E.design.orientation).qr, E.design.orientation, v); toast('QR görünümü değişince çakışmayı önlemek için varsayılan konuma alındı.'); }
     fullChanged();
   }
+
+  function setQrEnabled(v) { snap(); E.design.qrEnabled = !!v; fullChanged(); }
+  function setQrPlace(place) {
+    const cv = R.canvasOf(E.design.orientation), e = E.design.sys.qr, d = R.sysDims('qr', E.design.qrStyle);
+    const margin = 24, w = d.w * e.scale, h = d.h * e.scale;
+    let x = e.x, y = e.y;
+    if (place === 'start') { x = cv.width - w - margin; y = margin; }
+    else if (place === 'middle') { x = (cv.width - w) / 2; y = (cv.height - h) / 2; }
+    else if (place === 'end') { x = cv.width - w - margin; y = cv.height - h - margin; }
+    else if (place === 'bottom') { x = (cv.width - w) / 2; y = cv.height - h - margin; }
+    const cand = R.sysFix('qr', {x:x,y:y,scale:e.scale}, E.design.orientation, E.design.qrStyle);
+    snap(); E.design.sys.qr = cand; fullChanged();
+  }
   function onPropsClick(e) {
     const b = e.target.closest('button'); if (!b) return;
     const l = selL(), d = b.dataset;
@@ -726,8 +740,8 @@
     if (d.scolor) { snap(); E.design.sysStyle.color = d.scolor === 'auto' ? 'auto' : d.scolor.toUpperCase(); fullChanged(); return; }
     if (d.chip) { snap(); E.design.chipStyle = d.chip; fullChanged(); return; }
     if (d.qrstyle) { setQrStyle(d.qrstyle); return; }
-    if (d.qrvisible) { snap(); E.design.qrVisible = d.qrvisible === 'on'; fullChanged(); return; }
-    if (d.qrlayout) { snap(); const cv = R.canvasOf(E.design.orientation), q = E.design.sys.qr; if (d.qrlayout === 'top') { q.x = cv.width - 110; q.y = 42; } else if (d.qrlayout === 'center') { q.x = Math.round((cv.width - R.sysDims('qr', E.design.qrStyle).w*q.scale)/2); q.y = Math.round((cv.height - R.sysDims('qr', E.design.qrStyle).h*q.scale)/2); } else { q.x = cv.width - 110; q.y = cv.height - 110; } E.design.qrVisible = true; fullChanged(); return; }
+    if (d.qrtoggle) { setQrEnabled(E.design.qrEnabled === false); return; }
+    if (d.qrplace) { setQrPlace(d.qrplace); return; }
     if (d.qrbig) { openQr(); return; }
     if (d.sysreset) { const k = selSys(), df = R.sysDefaults(E.design.orientation)[k], ok = trySys(k, df); snap(); E.design.sys[k] = ok || R.sysFix(k, df, E.design.orientation, E.design.qrStyle); fullChanged(); return; }
     if (E.sel === 'bg') {
@@ -920,6 +934,8 @@
       else if (d.texture) { snap(); X.bgLayer(E.design).properties.texture = d.texture; fullChanged(); }
       else if (d.chip) { snap(); E.design.chipStyle = d.chip; fullChanged(); }
       else if (d.qrstyle) setQrStyle(d.qrstyle);
+      else if (d.qrtoggle) setQrEnabled(E.design.qrEnabled === false);
+      else if (d.qrplace) setQrPlace(d.qrplace);
       else if (d.scolor) { snap(); E.design.sysStyle.color = d.scolor === 'auto' ? 'auto' : d.scolor.toUpperCase(); fullChanged(); }
       else if (d.skinProduct) selectMarketSkin(d.skinProduct);
       else if (d.marketBuy) openMarketProduct(d.marketBuy);

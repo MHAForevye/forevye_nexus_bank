@@ -28,9 +28,14 @@
         const rows = d.cards || [];
         const cards = rows.map(c => {
           const svg = root.FNXRender && root.FNXRender.cardSvg ? root.FNXRender.cardSvg(c.design, { last4: c.card_token ? c.card_token.slice(-4) : '••••', cardToken: c.card_token || '', skin: c.skin && c.skin.skin || null, skinSerial: c.skin && c.skin.serial || '' }, { prefix: 'bank' + String(c.id).replace(/[^a-z0-9]/gi,''), animate: false }) : '';
-          return `<article class="bank-card-item"><div class="bank-card-art">${svg}</div><div class="bank-card-meta"><div class="row between"><b>${esc(c.label || c.display_name || 'Sanal kart')}</b><span class="chip ${c.status === 'active' ? 'ok' : 'bad'}">${c.status === 'active' ? 'Aktif' : 'Devre dışı'}</span></div><small>${c.skin && c.skin.name ? esc(c.skin.name) + ' · ' : ''}${c.is_default ? 'Varsayılan kart · ' : ''}Kart bakiyesi</small><strong>${money(c.balance || 0)} FN</strong><button class="btn primary" type="button" data-card-edit="${esc(c.id)}">Kart editöründe düzenle</button></div></article>`;
+          const actions = [
+            `<button class="btn primary" type="button" data-card-edit="${esc(c.id)}">Kart editöründe düzenle</button>`,
+            c.market_return ? `<button class="btn" type="button" data-card-return="${esc(c.id)}" data-refund="${Number(c.market_return.refund_minor || 0)}">Market’e iade et · ${money(c.market_return.refund_minor)} FN</button>` : '',
+            c.can_delete ? `<button class="btn danger" type="button" data-card-delete="${esc(c.id)}">Kartı sil</button>` : '',
+          ].filter(Boolean).join('');
+          return `<article class="bank-card-item"><div class="bank-card-art">${svg}</div><div class="bank-card-meta"><div class="row between"><b>${esc(c.label || c.display_name || 'Sanal kart')}</b><span class="chip ${c.status === 'active' ? 'ok' : 'bad'}">${c.status === 'active' ? 'Aktif' : 'Devre dışı'}</span></div><small>${c.skin && c.skin.name ? esc(c.skin.name) + ' · ' : ''}${c.is_default ? 'Varsayılan kart · ' : ''}Kart bakiyesi</small><strong>${money(c.balance || 0)} FN</strong>${actions}</div></article>`;
         }).join('');
-        box.innerHTML = `<section class="panel"><div class="row between"><div><h2 class="panel-h">Kartlarım</h2><p class="note">Market’ten aldığın kart tasarımları da burada görünür. Kartını seçip editörde düzenleyebilirsin.</p></div><button class="btn" type="button" data-card-new>+ Yeni kart</button></div>${cards ? `<div class="bank-card-grid">${cards}</div>` : '<p class="muted">Henüz kartın yok. Market’ten kart aldığında burada görünür.</p>'}<p class="note">${rows.length} / ${d.max_cards || 0} kart alanı kullanılıyor. Kartlar oyun içi sanal kartlardır.</p></section>`;
+        box.innerHTML = `<section class="panel"><div class="row between"><div><h2 class="panel-h">Kartlarım</h2><p class="note">Market’ten aldığın ve kendi tasarladığın kartlar burada görünür. İade edilebilir Market kartını FN karşılığında geri verebilir, boş özel kartını silebilirsin.</p></div><div class="row wrap"><button class="btn" type="button" data-bank-route="market">Nexus Market</button><button class="btn" type="button" data-card-new>+ Yeni kart</button></div></div>${cards ? `<div class="bank-card-grid">${cards}</div>` : '<p class="muted">Henüz kartın yok. Market’ten kart aldığında burada görünür.</p>'}<p class="note">${rows.length} / ${d.max_cards || 0} kart alanı kullanılıyor. Kartlar oyun içi sanal kartlardır.</p></section>`;
       } else if (route === 'home') {
         const [w,m,tx] = await Promise.all([req('GET','/api/wallet'), req('GET','/api/market'), req('GET','/api/transactions?limit=5')]);
         cache.home={w,m,tx};
@@ -59,6 +64,19 @@
     if(e.target.closest('[data-reload]')){paint();return;}
     const editCard=e.target.closest('[data-card-edit]'); if(editCard){try{const r=await req('POST','/api/editor/ticket',{card_id:editCard.dataset.cardEdit});location.href=r.url;}catch(err){root.FNXToast(err.message);}return;}
     if(e.target.closest('[data-card-new]')){try{const r=await req('POST','/api/editor/ticket',{label:'NEXUS'});location.href=r.url;}catch(err){root.FNXToast(err.message);}return;}
+    const returnCard=e.target.closest('[data-card-return]'); if(returnCard){
+      const amount=money(Number(returnCard.dataset.refund||0));
+      if(!confirm(`Bu Market kartını iade edip ${amount} FN anında geri almak istiyor musun? Kart arşivlenecek ve yeniden kullanılamayacak.`)) return;
+      returnCard.disabled=true;
+      try{const r=await req('POST',`/api/cards/${returnCard.dataset.cardReturn}/market-return`,{});root.FNXToast(`${money(r.refund_minor)} FN iade edildi.`);await paint();}
+      catch(err){root.FNXToast(err.message);returnCard.disabled=false;} return;
+    }
+    const deleteCard=e.target.closest('[data-card-delete]'); if(deleteCard){
+      if(!confirm('Bu kart kalıcı listeden kaldırılacak ve arşivlenecek. İşlem geri alınamaz. Devam edilsin mi?')) return;
+      deleteCard.disabled=true;
+      try{await req('POST',`/api/cards/${deleteCard.dataset.cardDelete}/delete`,{});root.FNXToast('Kart silindi.');await paint();}
+      catch(err){root.FNXToast(err.message);deleteCard.disabled=false;} return;
+    }
     if(e.target.closest('[data-exchange-open]')){openExchange();return;}
     if(e.target.closest('[data-read-all]')){try{await req('POST','/api/notifications/read',{all:true});paint();}catch(err){root.FNXToast(err.message);}return;}
     const tr=e.target.closest('[data-tx]'); if(tr){const x=(cache.activity?.items||cache.home?.tx?.items||[]).find(z=>z.id===tr.dataset.tx);if(x)detail('İşlem ayrıntısı',`<dl class="bank-detail"><dt>İşlem</dt><dd>${esc(x.type)}</dd><dt>Tutar</dt><dd>${x.amount<0?'−':'+'}${money(Math.abs(x.amount))} FN</dd><dt>${x.amount>0?'Gönderen':'Alıcı / karşı taraf'}</dt><dd>${esc(x.counterparty||'—')}</dd><dt>Açıklama</dt><dd>${esc(x.description||'Açıklama eklenmemiş.')}</dd><dt>Durum</dt><dd>${esc(x.status||'success')}</dd><dt>Tarih</dt><dd>${date(x.created_at)}</dd><dt>Referans</dt><dd>${esc(x.tx_ref||'—')}</dd></dl>`);return;}

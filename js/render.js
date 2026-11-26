@@ -127,7 +127,8 @@
   }
 
   var CHIP_STOPS = {
-    gold: ['#F6DC95', '#C9993F', '#EBCB78'], silver: ['#F1F3F8', '#A5ABBA', '#DDE1EA'], rose: ['#F3C9A7', '#B5744B', '#E7B28A']
+    gold: ['#F6DC95', '#C9993F', '#EBCB78'], silver: ['#F1F3F8', '#A5ABBA', '#DDE1EA'], rose: ['#F3C9A7', '#B5744B', '#E7B28A'],
+    titanium: ['#C9C6BF', '#77746E', '#ADAAA3'], onyx: ['#6A6E78', '#23252B', '#4A4D56'], emerald: ['#9BE3C4', '#2E8C6A', '#72CBA6']
   };
 
   function bgGrad(P, bp) {
@@ -163,7 +164,8 @@
   }
 
 
-  function qrMarkup(cardToken, P, x, y, size) {
+  var PREVIEW_TOKEN = 'NXC-PREVIEW1';
+  function qrMarkup(cardToken, x, y, size) {
     if (!cardToken || !root.FNXQRCode) return '';
     try {
       var qr = new root.FNXQRCode(0, (root.FNXQRErrorCorrectLevel || {}).M || 0);
@@ -221,6 +223,8 @@
       '<mask id="' + P + 'wm" maskUnits="userSpaceOnUse" x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '"><image href="' + WORDMARK.src + '" x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '"/></mask>' +
       '<rect x="' + wx + '" y="' + wy + '" width="' + ww + '" height="' + wh + '" fill="' + t.brand + '" mask="url(#' + P + 'wm)"/></g>';
     var cardToken = sys && sys.cardToken ? String(sys.cardToken) : '';
+    // Editör/şablon önizlemesinde henüz kart kimliği yoksa QR yerini görebilmek için örnek kimlik çizilir.
+    var qrToken = cardToken || (o.placeholder ? PREVIEW_TOKEN : '');
     var last4 = sys && sys.last4 ? String(sys.last4).replace(/[^A-Za-z0-9•]/g, '').slice(-4) : String((sys && sys.cardNumber) || '0000').replace(/\D/g, '').slice(-4);
     var codeText = cardToken || (sys && sys.cardCode) || '';
     var maskedNumber = sys && sys.cardNumber ? String(sys.cardNumber).replace(/\s/g,'').replace(/(\d{4})(?=\d)/g,'$1 ').trim() : '•••• •••• •••• ' + last4;
@@ -234,7 +238,7 @@
     if (t.plate) {
       body += '<rect data-sys="brand-plate" x="' + bp0.x + '" y="' + (bp0.y - 4) + '" width="' + (brandW + 8) + '" height="' + (brandH + 8) + '" rx="18" fill="' + (t.dark ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.6)') + '"/>';
     }
-    body += brand + chipMarkup((sp && sk.chip) || d.chipStyle || 'gold', cp0.x, cp0.y, 100 * cp0.s, 78 * cp0.s, P) + info + (d.qrEnabled === false ? '' : qrMarkup(cardToken, P, qr0.x, qr0.y, R.sysDims('qr', d.qrStyle).w * qr0.s));
+    body += brand + chipMarkup((sp && sk.chip) || d.chipStyle || 'gold', cp0.x, cp0.y, 100 * cp0.s, 78 * cp0.s, P) + info + (d.qrEnabled === false ? '' : qrMarkup(qrToken, qr0.x, qr0.y, R.sysDims('qr', d.qrStyle).w * qr0.s));
 
     // Kart sahibi adı: editördeki sistem kutusu koordinatlarını kullanır.
     var nm = String(d.userDisplayName || '').toLocaleUpperCase('tr-TR');
@@ -242,6 +246,15 @@
     var nameSize = Math.min(28 * name0.s, name0.w / (0.95 * len));
     body += '<text data-id="name" x="' + name0.x + '" y="' + (name0.y + 27 * name0.s) + '" font-family="' + FONT + '" font-weight="600" font-size="' + nameSize.toFixed(1) +
       '" letter-spacing="' + (nameSize * 0.12).toFixed(1) + '" fill="' + t.name + '">' + esc(nm) + '</text>';
+
+    // Editör: sistem öğelerini sahnede seçip sürüklemek için görünmez dokunma alanları (kapalı QR'ın alanı yoktur).
+    if (o.interactive) {
+      R.SYS_KEYS.forEach(function (k) {
+        if (k === 'qr' && d.qrEnabled === false) return;
+        var b = R.sysBox(k, se[k] || R.sysDefaults(d.orientation)[k], d.qrStyle);
+        body += '<rect data-sk="' + k + '" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" fill="transparent"/>';
+      });
+    }
 
     var edge = '<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="35" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="2" pointer-events="none"/>';
     return defs + '<g clip-path="url(#' + P + 'cc)">' + body + '</g>' + (sp ? sp.edge : edge);
@@ -251,12 +264,30 @@
     var cv = R.canvasOf(d && d.orientation); W = cv.width; H = cv.height;
     return '<svg class="card-svg" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Forevye Nexus sanal kartı">' + renderCard(d, sys, o) + '</svg>';
   }
+  // data-blend işaretli katmanların karışım kipini DOM'a eklendikten sonra uygular.
+  function applyBlend(node) {
+    Array.prototype.forEach.call(node.querySelectorAll('[data-blend]'), function (n) { n.style.mixBlendMode = n.getAttribute('data-blend'); });
+  }
+  // Çip görünümü seçicisindeki küçük önizleme.
+  function chipSvg(style) {
+    var k = CHIP_STOPS[style] ? style : 'gold', s = CHIP_STOPS[k], P = 'pv' + k + '_';
+    return '<svg viewBox="-2 -2 104 82" aria-hidden="true"><defs><linearGradient id="' + P + 'chip_' + k + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + s[0] + '"/><stop offset=".5" stop-color="' + s[1] + '"/><stop offset="1" stop-color="' + s[2] + '"/></linearGradient>' +
+      '<linearGradient id="' + P + 'chipsheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>' +
+      chipMarkup(k, 0, 0, 100, 78, P) + '</svg>';
+  }
+  // “QR'yi büyüt” penceresi için tek başına QR.
+  function qrSvg(token, o) {
+    o = o || {};
+    var size = Number(o.size) || 300, inner = qrMarkup(token, 0, 0, size);
+    if (!inner) return '<p>QR oluşturulamadı.</p>';
+    return '<svg class="' + esc(o.cls || '') + '" viewBox="0 0 ' + size + ' ' + size + '" width="' + size + '" height="' + size + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kart QR kodu">' + inner + '</svg>';
+  }
   function iconSvg(cls) {
     return '<svg class="' + (cls || '') + '" viewBox="' + ICON_VB.join(' ') + '" fill="currentColor" aria-hidden="true">' +
       ICON.map(function (dd) { return '<path d="' + dd + '"/>'; }).join('') + '</svg>';
   }
 
   root.FNXRender = { renderCard: renderCard, cardSvg: cardSvg, iconSvg: iconSvg, shapeInner: shapeInner, tone: tone,
-    contrast: contrast, minContrast: minContrast, relLum: relLum, esc: esc, bgLayer: bgLayer, chipMarkup: chipMarkup, WORDMARK: WORDMARK };
+    applyBlend: applyBlend, chipSvg: chipSvg, qrSvg: qrSvg, contrast: contrast, minContrast: minContrast, relLum: relLum, esc: esc, bgLayer: bgLayer, chipMarkup: chipMarkup, WORDMARK: WORDMARK };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.FNXRender;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,0 +1,19 @@
+QR YAMASI (26.11.2026)
+
+KURULUM
+Zip içindeki dosyaları deponun köküne AYNI YOL ile üzerine yaz:
+  index.html, css/style.css, js/rules.js, js/editor.js, js/render.js
+Commit et, sonra Ctrl+Shift+R.
+Sunucu (Worker) rules.js'in kendi kopyasını kullanıyorsa onu da güncelle.
+Aksi halde qrPlace kaydedilmeyebilir; QR kapalıyken onun yerine taşınan öğeler de reddedilebilir.
+
+DEĞİŞİKLİKLER
+- QR açma/kapatma. Kapalı QR çizilmez, yer kaplamaz. Açarken yeri doluysa boş alan aranır.
+- Başta (sağ üst), Ortada, Sonda (sağ alt), Altta (alt orta).
+- Çakışmada en yakın boş alan aranır; gerekirse QR küçültülür; hiç yer yoksa tasarım değişmez.
+  Sağ alttaki "•••• 1234" yazısının üstüne otomatik yerleştirme yapılmaz.
+- Veri: design.qrEnabled, design.sys.qr {x,y,scale}, design.qrPlace (start|middle|end|bottom|null).
+  QR elle taşınınca qrPlace null olur. Yön değişince seçili konum yeniden uygulanır.
+- Düzeltme: render.js'te eksik olan applyBlend, chipSvg, qrSvg ve sahnedeki data-sk seçim alanları
+  eklendi (Sistem sekmesi hata veriyordu). titanium, onyx, emerald çip renkleri eklendi.
+- index.html: değişen dosyaların önbellek sürümü güncellendi.

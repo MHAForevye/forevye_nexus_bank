@@ -161,7 +161,7 @@
     });
     const sk = selSys(), l = selL();
     if (E.sel === 'bg') o += `<rect class="selbox" x="3" y="3" width="${c.width - 6}" height="${c.height - 6}" rx="34"/>`;
-    else if (sk) {
+    else if (sk && !(sk === 'qr' && E.design.qrEnabled === false)) {
       const b = R.sysBox(sk, E.design.sys[sk], E.design.qrStyle);
       o += `<rect class="selbox sysb" x="${b.x - 3}" y="${b.y - 3}" width="${b.w + 6}" height="${b.h + 6}" rx="6"/>`;
       [['nw', b.x - 3, b.y - 3], ['ne', b.r + 3, b.y - 3], ['se', b.r + 3, b.b + 3], ['sw', b.x - 3, b.b + 3]].forEach(h => {
@@ -191,7 +191,7 @@
   // Hedef kutular: sistem öğeleri ve diğer görünür dekoratif katmanlar.
   function targetBoxes(excludeId, excludeSys) {
     const out = [];
-    R.SYS_KEYS.forEach(k => { if (k !== excludeSys) { const b = R.sysBox(k, E.design.sys[k], E.design.qrStyle); out.push({ l: b.x, r: b.r, t: b.y, b: b.b, cx: b.x + b.w / 2, cy: b.y + b.h / 2 }); } });
+    R.SYS_KEYS.forEach(k => { if (k !== excludeSys && !(k === 'qr' && E.design.qrEnabled === false)) { const b = R.sysBox(k, E.design.sys[k], E.design.qrStyle); out.push({ l: b.x, r: b.r, t: b.y, b: b.b, cx: b.x + b.w / 2, cy: b.y + b.h / 2 }); } });
     if (!excludeSys || true) E.design.layers.forEach(l => {
       if (l.type === 'background' || !l.visible || l.id === excludeId) return;
       const b = R.bbox(l.properties); if (b.w > cv().width * 1.2) return;
@@ -282,7 +282,16 @@
   function trySys(key, cand) {
     const fixed = R.sysFix(key, cand, E.design.orientation, E.design.qrStyle);
     const test = clone(E.design.sys); test[key] = fixed;
-    return R.sysConflicts(test, E.design.qrStyle).some(p => p.indexOf(key) >= 0) ? null : fixed;
+    return R.sysConflicts(test, E.design.qrStyle, E.design.qrEnabled).some(p => p.indexOf(key) >= 0) ? null : fixed;
+  }
+  // Elle yapılan değişiklik: QR gerçekten yer değiştirdiyse hazır konum seçimi düşer (düğme işareti güncellenir).
+  function setSys(key, v) {
+    const old = E.design.sys[key];
+    E.design.sys[key] = v;
+    if (key === 'qr' && E.design.qrPlace && (old.x !== v.x || old.y !== v.y || old.scale !== v.scale)) { E.design.qrPlace = null; syncQrButtons(); }
+  }
+  function syncQrButtons() {
+    document.querySelectorAll('#view-editor [data-qrplace]').forEach(b => b.setAttribute('aria-pressed', String(E.design.qrPlace === b.dataset.qrplace)));
   }
   function onMoveSys(e) {
     const d = E.drag, key = d.key, pt = toSvg(e), dx = pt.x - d.start.x, dy = pt.y - d.start.y;
@@ -307,7 +316,7 @@
     }
     const last = d.last;
     const ok = trySys(key, cand) || trySys(key, { x: cand.x, y: last.y, scale: cand.scale }) || trySys(key, { x: last.x, y: cand.y, scale: cand.scale });
-    if (ok) { d.last = ok; E.design.sys[key] = ok; }
+    if (ok) { d.last = ok; setSys(key, ok); }
     stageChanged(); syncInputs();
   }
   function onMove(e) {
@@ -431,6 +440,7 @@
       const keep = deco.filter(l => !T.isTemplateLayer(l)).map(remap);
       d.layers = [bgOld].concat(fresh.layers.slice(1), keep);
     } else d.layers = [bgOld].concat(deco.map(remap));
+    if (d.qrPlace) { const spot = R.placeQr(d, d.qrPlace); if (spot) d.sys.qr = spot.entry; }
     E.design = norm(d); E.sel = null; syncOrient(); fullChanged();
     toast(o === 'portrait' ? 'Dikey kart düzenine geçildi.' : 'Yatay kart düzenine geçildi.');
   }
@@ -551,10 +561,17 @@
       .catch(e => { toast(e.message || 'Market açılamadı.'); setStatus('error', 'Market bağlantısı kurulamadı'); });
   }
 
+  function qrControlsHtml() {
+    const on = E.design.qrEnabled !== false;
+    return `<div class="row"><button type="button" class="btn sm${on ? '' : ' primary'}" data-qrtoggle="1" aria-pressed="${on}">QR ${on ? 'Kapat' : 'Aç'}</button></div>` +
+      '<div class="row wrap qr-places" role="group" aria-label="QR konumu">' + Object.keys(R.QR_PLACES).map(k =>
+        `<button type="button" class="btn sm" data-qrplace="${k}" aria-pressed="${E.design.qrPlace === k}"${on ? '' : ' disabled'}>${R.QR_PLACES[k].label}</button>`).join('') + '</div>' +
+      `<p class="muted pad">${on ? 'Seçtiğin konum doluysa QR en yakın boş alana yerleşir.' : 'QR kapalı: kartta görünmez ve yer kaplamaz. Konum seçmek için QR\'ı aç.'}</p>`;
+  }
   function sysTabHtml() {
     return '<h3 class="panel-h">EMV çip</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>' +
-      '<h3 class="panel-h">QR kod</h3>' + '<div class="row"><button type="button" class="btn sm" data-qrtoggle="1">QR ' + (E.design.qrEnabled === false ? 'Aç' : 'Kapat') + '</button></div>' + '<div class="row wrap"><button type="button" class="btn sm" data-qrplace="start">Başta</button><button type="button" class="btn sm" data-qrplace="middle">Ortada</button><button type="button" class="btn sm" data-qrplace="end">Sonda</button><button type="button" class="btn sm" data-qrplace="bottom">Altta</button></div>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
-      '<p class="muted pad">“Gizli simge” kartta yalnızca küçük bir QR simgesi gösterir; simgeye tıklayınca QR büyütülerek ayrı pencerede açılır (Kartlarım’da).</p>' +
+      '<h3 class="panel-h">QR kod</h3>' + qrControlsHtml() + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
+      '<p class="muted pad">“Gizli simge” seçeneği QR\'ı kartta küçük boyutta gösterir.</p>' +
       '<h3 class="panel-h">Sistem yazı rengi</h3>' + sysColorHtml() +
       '<p class="muted pad">Çip, logo, ad, numara, kod ve QR sistem öğeleridir: silinemez, gizlenemez, dekoratif katmanların arkasına alınamaz. Konumlarını ve boyutlarını sahnede seçerek değiştirebilirsin.</p>';
   }
@@ -590,7 +607,7 @@
     if (k === 'name') h += nameColorHtml();
     if (k === 'brand' || k === 'code' || k === 'number') h += '<h3 class="panel-h">Yazı rengi</h3>' + sysColorHtml();
     if (k === 'chip') h += '<h3 class="panel-h">Çip görünümü</h3><div class="chip-grid">' + L.CHIPS.map(c => `<button type="button" class="opt chip${E.design.chipStyle === c.id ? ' on' : ''}" data-chip="${c.id}">${X.chipSvg(c.id)}<b>${c.n}</b></button>`).join('') + '</div>';
-    if (k === 'qr') h += '<h3 class="panel-h">Görünüm</h3>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
+    if (k === 'qr') h += '<h3 class="panel-h">QR kod</h3>' + qrControlsHtml() + '<h3 class="panel-h">Görünüm</h3>' + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
       '<div class="row"><button type="button" class="btn sm" data-qrbig="1">QR\'yi büyüt</button></div><p class="muted pad">QR yalnızca sanal kart kimliğini taşır; taranabilirliği korunur.</p>';
     return h;
   }
@@ -675,7 +692,7 @@
     if (field === 'scale') e.scale = v / 100; else e[field] = v;
     const ok = trySys(k, e);
     if (!ok) { toast('Bu değer başka bir sistem öğesini kapatacağı için uygulanmadı.'); return; }
-    snap('s' + k + field); E.design.sys[k] = ok; stageChanged(); syncInputs();
+    snap('s' + k + field); setSys(k, ok); stageChanged(); syncInputs();
   }
 
   function onPropsInput(e) {
@@ -713,25 +730,43 @@
       fullChanged();
     }
   }
+  // Arama sonucunu tasarım verisine yazar (design.sys.qr).
+  function applyQrSpot(spot, movedMsg) {
+    E.design.sys.qr = spot.entry;
+    if (spot.shrunk) toast('Boş alana sığması için QR küçültülerek yerleştirildi.');
+    else if (spot.moved) toast(movedMsg);
+  }
   function setQrStyle(v) {
     if (E.design.qrStyle === v) return;
+    const next = Object.assign({}, E.design, { qrStyle: v });
+    const on = E.design.qrEnabled !== false;
+    // Hazır konum seçiliyse yeni boyuta göre o konum yeniden hesaplanır; değilse bulunduğu yer korunmaya çalışılır.
+    const spot = E.design.qrPlace ? R.placeQr(next, E.design.qrPlace) : R.findQrSpot(next);
+    if (!spot && on) { toast('Bu görünüm için kartta boş alan yok. Önce başka bir sistem öğesini taşı veya küçült.'); return; }
     snap(); E.design.qrStyle = v;
-    const q = trySys('qr', E.design.sys.qr);
-    if (q) E.design.sys.qr = q; else { E.design.sys.qr = R.sysFix('qr', R.sysDefaults(E.design.orientation).qr, E.design.orientation, v); toast('QR görünümü değişince çakışmayı önlemek için varsayılan konuma alındı.'); }
+    if (spot) applyQrSpot(spot, 'Çakışmayı önlemek için QR en yakın boş alana alındı.');
     fullChanged();
   }
-
-  function setQrEnabled(v) { snap(); E.design.qrEnabled = !!v; fullChanged(); }
+  function setQrEnabled(v) {
+    if ((E.design.qrEnabled !== false) === !!v) return;
+    if (!v) { snap(); E.design.qrEnabled = false; fullChanged(); return; }
+    // QR kapalıyken yerine başka öğe taşınmış olabilir: açarken yer yeniden doğrulanır.
+    const cur = E.design.sys.qr, kept = R.findQrSpot(E.design);
+    const spot = kept && !kept.moved && !kept.shrunk ? kept : (E.design.qrPlace ? R.placeQr(E.design, E.design.qrPlace, cur.scale) : kept);
+    if (!spot) { toast('QR için boş alan yok. Önce başka bir sistem öğesini taşı veya küçült.'); return; }
+    snap(); E.design.qrEnabled = true;
+    applyQrSpot(spot, 'QR\'ın yeri dolmuş; en yakın boş alana yerleştirildi.');
+    fullChanged();
+  }
   function setQrPlace(place) {
-    const cv = R.canvasOf(E.design.orientation), e = E.design.sys.qr, d = R.sysDims('qr', E.design.qrStyle);
-    const margin = 24, w = d.w * e.scale, h = d.h * e.scale;
-    let x = e.x, y = e.y;
-    if (place === 'start') { x = cv.width - w - margin; y = margin; }
-    else if (place === 'middle') { x = (cv.width - w) / 2; y = (cv.height - h) / 2; }
-    else if (place === 'end') { x = cv.width - w - margin; y = cv.height - h - margin; }
-    else if (place === 'bottom') { x = (cv.width - w) / 2; y = cv.height - h - margin; }
-    const cand = R.sysFix('qr', {x:x,y:y,scale:e.scale}, E.design.orientation, E.design.qrStyle);
-    snap(); E.design.sys.qr = cand; fullChanged();
+    if (E.design.qrEnabled === false) return;
+    const spot = R.placeQr(E.design, place);
+    if (!spot) { toast('QR için boş alan bulunamadı. Önce başka bir sistem öğesini taşı veya küçült.'); return; }
+    const c = E.design.sys.qr, n = spot.entry;
+    if (E.design.qrPlace === place && c.x === n.x && c.y === n.y && c.scale === n.scale) return;
+    snap(); E.design.qrPlace = place;
+    applyQrSpot(spot, '“' + R.QR_PLACES[place].label + '” konumu dolu: QR en yakın boş alana yerleştirildi.');
+    fullChanged();
   }
   function onPropsClick(e) {
     const b = e.target.closest('button'); if (!b) return;
@@ -743,7 +778,15 @@
     if (d.qrtoggle) { setQrEnabled(E.design.qrEnabled === false); return; }
     if (d.qrplace) { setQrPlace(d.qrplace); return; }
     if (d.qrbig) { openQr(); return; }
-    if (d.sysreset) { const k = selSys(), df = R.sysDefaults(E.design.orientation)[k], ok = trySys(k, df); snap(); E.design.sys[k] = ok || R.sysFix(k, df, E.design.orientation, E.design.qrStyle); fullChanged(); return; }
+    if (d.sysreset) {
+      const k = selSys(), df = R.sysDefaults(E.design.orientation)[k];
+      if (k === 'qr') {
+        const spot = R.findQrSpot(E.design, df);
+        if (!spot) { toast('QR için boş alan bulunamadı.'); return; }
+        snap(); E.design.qrPlace = null; applyQrSpot(spot, 'Varsayılan konum dolu: QR en yakın boş alana yerleştirildi.');
+      } else { const ok = trySys(k, df); snap(); E.design.sys[k] = ok || R.sysFix(k, df, E.design.orientation, E.design.qrStyle); }
+      fullChanged(); return;
+    }
     if (E.sel === 'bg') {
       const p = X.bgLayer(E.design).properties;
       if (d.bgmode) { snap(); p.mode = d.bgmode; if (p.mode === 'gradient' && p.colors.length < 2) p.colors.push('#3A3F52'); fullChanged(); }
@@ -888,7 +931,7 @@
       const c = clone(E.design.sys[sk]);
       if (e.key === 'ArrowLeft') c.x -= step; if (e.key === 'ArrowRight') c.x += step;
       if (e.key === 'ArrowUp') c.y -= step; if (e.key === 'ArrowDown') c.y += step;
-      const ok = trySys(sk, c); if (ok) { snap('nudge' + sk); E.design.sys[sk] = ok; stageChanged(); syncInputs(); }
+      const ok = trySys(sk, c); if (ok) { snap('nudge' + sk); setSys(sk, ok); stageChanged(); syncInputs(); }
       return;
     }
     if (!l || l.locked) return;

@@ -39,6 +39,18 @@
     { id: 'chipqr', label: 'Çip ve QR' }
   ];
   var QR_STYLES = ['tint', 'icon'];
+  // QR hazır konumları. at(): hedef nokta (cw/ch: kart, w/h: QR kutusu). wx/wy: boş alan ararken eksen ağırlığı
+  // (wy=2: önce aynı satırda yana kayılır, hedefin yüksekliği korunmaya çalışılır).
+  var QR_PLACE_MARGIN = 24;
+  var QR_PLACES = {
+    start: { label: 'Başta', wx: 1, wy: 2, at: function (cw, ch, w, h, m) { return { x: cw - w - m, y: m }; } },
+    middle: { label: 'Ortada', wx: 1, wy: 1, at: function (cw, ch, w, h) { return { x: (cw - w) / 2, y: (ch - h) / 2 }; } },
+    end: { label: 'Sonda', wx: 1, wy: 2, at: function (cw, ch, w, h, m) { return { x: cw - w - m, y: ch - h - m }; } },
+    bottom: { label: 'Altta', wx: 1, wy: 2, at: function (cw, ch, w, h, m) { return { x: (cw - w) / 2, y: ch - h - m }; } }
+  };
+  function isQrPlace(p) { return typeof p === 'string' && Object.prototype.hasOwnProperty.call(QR_PLACES, p); }
+  // Sağ alttaki sabit "•••• 1234" yazısı sistem öğesi listesinde değildir; otomatik yerleştirme onu da kapatmaz.
+  function footerBox(o) { var c = canvasOf(o); return { x: c.width - 150, y: c.height - 42, r: c.width - 24, b: c.height - 18 }; }
   var NAME_AREA = { x: 48, y: 448, w: 400, h: 34 };   // eski API (yatay varsayılan ad kutusu)
   var NAME_LIMITS = { min: 2, max: 18 };
 
@@ -139,18 +151,65 @@
   }
   function overlap(a, b) { return a.x < b.r + GAP && a.r + GAP > b.x && a.y < b.b + GAP && a.b + GAP > b.y; }
   // Birbirini kapatan sistem öğesi çiftleri: [[anahtarA, anahtarB], ...]
-  function sysConflicts(sys, qrStyle) {
-    var out = [], boxes = {};
-    SYS_KEYS.forEach(function (k) { boxes[k] = sysBox(k, sys[k], qrStyle); });
-    for (var i = 0; i < SYS_KEYS.length; i++) for (var j = i + 1; j < SYS_KEYS.length; j++) {
-      if (overlap(boxes[SYS_KEYS[i]], boxes[SYS_KEYS[j]])) out.push([SYS_KEYS[i], SYS_KEYS[j]]);
+  // qrEnabled === false ise kapalı QR yer kaplamaz.
+  function activeKeys(qrEnabled) { return SYS_KEYS.filter(function (k) { return k !== 'qr' || qrEnabled !== false; }); }
+  function sysConflicts(sys, qrStyle, qrEnabled) {
+    var out = [], boxes = {}, keys = activeKeys(qrEnabled);
+    keys.forEach(function (k) { boxes[k] = sysBox(k, sys[k], qrStyle); });
+    for (var i = 0; i < keys.length; i++) for (var j = i + 1; j < keys.length; j++) {
+      if (overlap(boxes[keys[i]], boxes[keys[j]])) out.push([keys[i], keys[j]]);
     }
     return out;
+  }
+
+  // ---- QR için boş alan arama ----
+  // Hedefe en yakın boş noktayı bulur. Engeller dikdörtgen olduğundan en yakın boş nokta; hedefin, kart sınırının
+  // veya bir engel kenarının x/y değerlerinin birleşimindedir. İstenen boyutta yer yoksa QR küçültülerek yeniden denenir.
+  // target(w, h) -> {x, y}. Dönüş: { entry:{x,y,scale}, moved, shrunk } ya da null (hiç yer yok). design değiştirilmez.
+  function searchQrSpot(design, target, scale, wx, wy) {
+    var o = design.orientation, style = design.qrStyle, c = canvasOf(o), dim = sysDims('qr', style);
+    var sys = design.sys || sysDefaults(o), pad = GAP + 0.2;
+    var blocks = SYS_KEYS.filter(function (k) { return k !== 'qr'; }).map(function (k) { return sysBox(k, sys[k], style); });
+    blocks.push(footerBox(o));
+    var first = sysFix('qr', { x: MARGIN, y: MARGIN, scale: scale }, o, style).scale;
+    var scales = [first];
+    for (var s = Math.round(first * 100) - 5; s > SYS.qr.min * 100; s -= 5) scales.push(s / 100);
+    if (first > SYS.qr.min) scales.push(SYS.qr.min);
+    for (var i = 0; i < scales.length; i++) {
+      var sc = scales[i], w = dim.w * sc, h = dim.h * sc, t = target(w, h);
+      var want = sysFix('qr', { x: t.x, y: t.y, scale: sc }, o, style);
+      var xs = [want.x, MARGIN, c.width - MARGIN - w], ys = [want.y, MARGIN, c.height - MARGIN - h];
+      blocks.forEach(function (b) { xs.push(b.r + pad, b.x - w - pad); ys.push(b.b + pad, b.y - h - pad); });
+      var best = null, bestCost = Infinity;
+      xs.forEach(function (x) {
+        ys.forEach(function (y) {
+          var e = sysFix('qr', { x: x, y: y, scale: sc }, o, style), box = sysBox('qr', e, style);
+          if (blocks.some(function (b) { return overlap(box, b); })) return;
+          var dx = (e.x - want.x) * wx, dy = (e.y - want.y) * wy, cost = dx * dx + dy * dy;
+          if (cost < bestCost) { best = e; bestCost = cost; }
+        });
+      });
+      if (best) return { entry: best, moved: best.x !== want.x || best.y !== want.y, shrunk: sc < first };
+    }
+    return null;
+  }
+  // Hazır konum (start | middle | end | bottom) için yerleşim.
+  function placeQr(design, place, scale) {
+    if (!isQrPlace(place)) return null;
+    var p = QR_PLACES[place], c = canvasOf(design.orientation);
+    var cur = (design.sys || sysDefaults(design.orientation)).qr;
+    return searchQrSpot(design, function (w, h) { return p.at(c.width, c.height, w, h, QR_PLACE_MARGIN); },
+      scale === undefined ? cur.scale : scale, p.wx, p.wy);
+  }
+  // Verilen konum boşsa aynen, doluysa en yakın boş alanı döndürür.
+  function findQrSpot(design, pref) {
+    var e = pref || (design.sys || sysDefaults(design.orientation)).qr;
+    return searchQrSpot(design, function () { return { x: e.x, y: e.y }; }, e.scale, 1, 1);
   }
   // Çakışmayı gösteren kılavuz bölgeleri (editörde "korumalı alanlar" olarak çizilir; engel değil, rehberdir).
   function zonesOf(design) {
     var o = design.orientation, sys = design.sys || sysDefaults(o), q = design.qrStyle;
-    return SYS_KEYS.map(function (k) {
+    return activeKeys(design.qrEnabled).map(function (k) {
       var b = sysBox(k, sys[k], q);
       return { id: k, label: SYS[k].label, x: b.x, y: b.y, w: b.w, h: b.h };
     });
@@ -198,6 +257,7 @@
       chipStyle: 'gold',
       qrStyle: 'tint',
       qrEnabled: d.qrEnabled !== false,
+      qrPlace: isQrPlace(d.qrPlace) ? d.qrPlace : null,   // seçilen hazır konum; elle taşınınca null
       sys: {},
       version: Math.max(1, Math.floor(num(d.version, 1, 1e9, 1)))
     };
@@ -224,7 +284,7 @@
     // Sistem düzeni: konum/ölçek kart sınırına kırpılır; birbirini kapatan öğeler varsayılana döner (hata bildirilir).
     var sin = d.sys && typeof d.sys === 'object' ? d.sys : {}, defs = sysDefaults(orient);
     SYS_KEYS.forEach(function (k) { out.sys[k] = sysFix(k, sin[k], orient, out.qrStyle); });
-    sysConflicts(out.sys, out.qrStyle).forEach(function (pair) {
+    sysConflicts(out.sys, out.qrStyle, out.qrEnabled).forEach(function (pair) {
       errors.push('"' + SYS[pair[0]].label + '" ile "' + SYS[pair[1]].label + '" birbirini kapatıyor.');
       out.sys[pair[1]] = sysFix(pair[1], defs[pair[1]], orient, out.qrStyle);
     });
@@ -312,6 +372,7 @@
     MAX_LAYERS: MAX_LAYERS, MAX_BG_COLORS: MAX_BG_COLORS, QR_STYLES: QR_STYLES,
     SYS_KEYS: SYS_KEYS, SYS: SYS, SYS_GROUPS: SYS_GROUPS, sysDefaults: sysDefaults, sysDims: sysDims, sysBox: sysBox,
     sysFix: sysFix, sysConflicts: sysConflicts, zonesOf: zonesOf,
+    QR_PLACES: QR_PLACES, placeQr: placeQr, findQrSpot: findQrSpot,
     sanitizeName: sanitizeName, validateName: validateName, bbox: bbox, violation: violation,
     pushOut: pushOut, isLarge: isLarge, contrastRatio: ratio, validateDesign: validateDesign
   };

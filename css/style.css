@@ -131,6 +131,8 @@ input[type=color]{width:38px;height:32px;border:1px solid var(--line);border-rad
 .handle.rot{fill:var(--focus);cursor:grab}
 .handle.sys{stroke:#E7B24C}
 [data-sk]{cursor:pointer}
+.btn[data-qrplace][aria-pressed="true"]{border-color:#E7B24C;box-shadow:0 0 0 1px #E7B24C inset}
+.btn[data-qrplace]:disabled{opacity:.45;cursor:not-allowed}
 .field{margin-bottom:10px}
 .field label{display:block;font-size:14px;color:var(--mist);margin-bottom:6px}
 .field-foot{display:flex;justify-content:space-between;min-height:18px;margin-top:4px}

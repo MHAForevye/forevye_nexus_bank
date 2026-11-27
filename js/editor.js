@@ -573,7 +573,7 @@
       '<h3 class="panel-h">QR kod</h3>' + qrControlsHtml() + seg([['tint', 'Kompakt plaka'], ['icon', 'Gizli simge']], E.design.qrStyle, 'qrstyle') +
       '<p class="muted pad">“Gizli simge” seçeneği QR\'ı kartta küçük boyutta gösterir.</p>' +
       '<h3 class="panel-h">Sistem yazı rengi</h3>' + sysColorHtml() +
-      '<p class="muted pad">Çip, logo, ad, numara, kod ve QR sistem öğeleridir: silinemez, gizlenemez, dekoratif katmanların arkasına alınamaz. Konumlarını ve boyutlarını sahnede seçerek değiştirebilirsin.</p>';
+      '<p class="muted pad">Çip, logo, ad, numara ve kod sistem öğeleridir: silinemez, gizlenemez, dekoratif katmanların arkasına alınamaz. Konumlarını ve boyutlarını sahnede seçerek değiştirebilirsin.</p>';
   }
 
   /* ---------- sağ panel ---------- */
@@ -601,6 +601,7 @@
   function sysProps(k) {
     const m = R.SYS[k], e = E.design.sys[k];
     let h = `<h3 class="panel-h">${ic('shield')} ${m.label}</h3><p class="lockinfo">${ic('lock')}<span>Sistem öğesi: silinemez, gizlenemez, dekoratif katmanların üstünde kalır ve kart dışına çıkamaz.</span></p>`;
+    if (k === 'qr') h = `<h3 class="panel-h">${m.label}</h3><p class="muted pad">QR kodu istediğin zaman kapatıp açabilirsin.</p>`;
     h += '<div class="grid2">' + `<label class="f"><span>X</span><input type="number" data-s="x" value="${r1(e.x)}" step="1"></label><label class="f"><span>Y</span><input type="number" data-s="y" value="${r1(e.y)}" step="1"></label></div>`;
     h += `<label class="f"><span>Boyut</span><input type="range" min="${Math.round(m.min * 100)}" max="${Math.round(m.max * 100)}" step="5" value="${Math.round(e.scale * 100)}" data-s="scale" aria-label="Boyut"><input type="number" class="tiny" data-s="scale" value="${Math.round(e.scale * 100)}" min="${Math.round(m.min * 100)}" max="${Math.round(m.max * 100)}"></label>`;
     h += '<div class="row"><button type="button" class="btn sm" data-sysreset="1">Varsayılan konuma dön</button></div>';
@@ -818,6 +819,12 @@
     R.SYS_GROUPS.forEach(g => {
       sysH += `<div class="lgroup"><h4>${g.label}</h4>`;
       R.SYS_KEYS.filter(k => R.SYS[k].group === g.id).forEach(k => {
+        if (k === 'qr') {
+          const on = E.design.qrEnabled !== false, label = on ? 'QR kodu kapat' : 'QR kodu aç';
+          sysH += `<div class="lrow sys qrrow${E.sel === 'sys:qr' ? ' sel' : ''}${on ? '' : ' hid'}" data-sel="sys:qr"><span class="lname">${R.SYS[k].label}</span>` +
+            `<button type="button" class="ib" data-lact="qrvis" aria-pressed="${on}" aria-label="${label}" title="${label}">${ic(on ? 'eye' : 'eyeOff')}</button></div>`;
+          return;
+        }
         sysH += `<div class="lrow sys${E.sel === 'sys:' + k ? ' sel' : ''}" data-sel="sys:${k}" title="Sistem tarafından korunur: silinemez, gizlenemez, sırası değişmez">${ic('lock')}<span class="lname">${R.SYS[k].label}</span><span class="tag">korumalı</span></div>`;
       });
       sysH += '</div>';
@@ -840,6 +847,7 @@
   }
   function onLayersClick(e) {
     const b = e.target.closest('[data-lact]');
+    if (b && b.dataset.lact === 'qrvis') { setQrEnabled(E.design.qrEnabled === false); return; }
     if (b) { act(b.dataset.lact, b.dataset.id); return; }
     const row = e.target.closest('.lrow'); if (!row) return;
     if (row.dataset.sel) select(row.dataset.sel);
@@ -872,6 +880,7 @@
 
   /* ---------- kaydet, çık, sıfırla ---------- */
   let saving = false;
+  const QR_NOT_SAVED = 'Diğer değişiklikler kaydedildi, ancak sunucu QR aç/kapat ayarını saklamadı. Nexus sunucusundaki kart kuralları dosyası güncellenmeli.';
   async function save() {
     if (saving) return;
     const res = R.validateDesign(E.design);
@@ -893,7 +902,11 @@
     }
     clearTimeout(E.draftTimer); clearDraft();
     E.design = norm(final); E.saved = clone(E.design); E.savedJson = dirtyKey(E.design); E.savedSkinProductId = E.skinProductId || null; E.errors = [];
-    fullChanged(); toast('Kartın kaydedildi.');
+    if (E.design.qrEnabled !== out.qrEnabled) {
+      // Sunucunun döndürdüğü kayıtta seçim yok: kullanıcının seçimi ekranda "kaydedilmemiş" olarak kalır.
+      E.design.qrEnabled = out.qrEnabled; E.errors = [QR_NOT_SAVED];
+      fullChanged(); setStatus('error', 'QR ayarı sunucuya kaydedilemedi');
+    } else { fullChanged(); toast('Kartın kaydedildi.'); }
     if (E.opts && E.opts.onSave) E.opts.onSave(final);
   }
   async function exit() {

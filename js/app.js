@@ -110,7 +110,7 @@
     return `<header class="page-h"><h1>Kartım</h1><p class="muted">Görünümü sen tasarlarsın; kimlik bilgilerini sistem belirler.</p></header>
     <div class="card-page">
       <section class="hero">${cardBlock(ctx.design, s, 'd')}
-        <div class="row"><a class="btn primary" href="#/editor">Kartını tasarla</a></div></section>
+        <div class="row"><a class="btn primary" href="#/editor">Kartını tasarla</a><button class="btn" type="button" data-home-qr aria-pressed="${ctx.design.qrEnabled !== false}">QR ${ctx.design.qrEnabled === false ? 'Aç' : 'Kapat'}</button></div></section>
       <section class="panel details">
         <h2 class="panel-h">Kart bilgileri</h2>
         <dl>
@@ -177,6 +177,12 @@
       });
       t.addEventListener('pointerleave', () => { t.style.transform = ''; });
     });
+    document.querySelectorAll('[data-home-qr]').forEach(b => b.addEventListener('click', () => {
+      const next = R.withQr(ctx.design, ctx.design.qrEnabled === false);
+      if (!next) { root.FNXToast('QR için kartta boş alan yok. Kart editöründe yer aç.'); return; }
+      if (!store.set('fnx.design', next)) { root.FNXToast('Kaydedilemedi: tarayıcı depolaması kullanılamıyor.'); return; }
+      ctx.design = next; route();
+    }));
     document.querySelectorAll('[data-skin]').forEach(b => b.addEventListener('click', () => { W.equip(b.dataset.skin); route(); }));
     document.querySelectorAll('[data-reveal]').forEach(b => {
       let timer;

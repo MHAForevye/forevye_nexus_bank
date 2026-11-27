@@ -1,11 +1,14 @@
-QR YAMASI (26.11.2026)
+QR YAMASI v2 (27.11.2026) - ilk QR yamasının yerine geçer
 
 KURULUM
 Zip içindeki dosyaları deponun köküne AYNI YOL ile üzerine yaz:
-  index.html, css/style.css, js/rules.js, js/editor.js, js/render.js
+  index.html, css/style.css, js/rules.js, js/editor.js, js/render.js, js/connect.js, js/bank-ui.js, js/app.js
 Commit et, sonra Ctrl+Shift+R.
-Sunucu (Worker) rules.js'in kendi kopyasını kullanıyorsa onu da güncelle.
-Aksi halde qrPlace kaydedilmeyebilir; QR kapalıyken onun yerine taşınan öğeler de reddedilebilir.
+ÖNEMLİ - SUNUCU
+QR kapatınca kayıttan sonra geri geliyorsa muhtemel neden sunucunun qrEnabled alanını saklamaması.
+Bu yama sunucuyu DEĞİŞTİRMEZ. Sunucu alanı atarsa artık uyarı gösterilir.
+Yayındaki Nexus Worker kaynağındaki kart kuralları dosyasının qrEnabled ve qrPlace alanlarını
+koruması ve Worker'ın yeniden yayınlanması gerekir.
 
 DEĞİŞİKLİKLER
 - QR açma/kapatma. Kapalı QR çizilmez, yer kaplamaz. Açarken yeri doluysa boş alan aranır.
@@ -17,3 +20,8 @@ DEĞİŞİKLİKLER
 - Düzeltme: render.js'te eksik olan applyBlend, chipSvg, qrSvg ve sahnedeki data-sk seçim alanları
   eklendi (Sistem sekmesi hata veriyordu). titanium, onyx, emerald çip renkleri eklendi.
 - index.html: değişen dosyaların önbellek sürümü güncellendi.
+
+v2
+- Editör katman listesinde QR satırının kilidi ve "korumalı" etiketi kaldırıldı; göz düğmesiyle aç/kapat.
+- Kartlarım (ve sunucusuz modda Kartım) ekranına QR Aç/Kapat düğmesi eklendi.
+- Sunucu QR ayarını saklamazsa "kaydedildi" denmez, uyarı gösterilir.

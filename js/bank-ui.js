@@ -28,7 +28,9 @@
         const rows = d.cards || [];
         const cards = rows.map(c => {
           const svg = root.FNXRender && root.FNXRender.cardSvg ? root.FNXRender.cardSvg(c.design, { last4: c.card_token ? c.card_token.slice(-4) : '••••', cardToken: c.card_token || '', skin: c.skin && c.skin.skin || null, skinSerial: c.skin && c.skin.serial || '' }, { prefix: 'bank' + String(c.id).replace(/[^a-z0-9]/gi,''), animate: false }) : '';
+          const qrOn = !(c.design && c.design.qrEnabled === false);
           const actions = [
+            c.design ? `<button class="btn" type="button" data-card-qr="${esc(c.id)}" data-qr-next="${qrOn ? 'off' : 'on'}" aria-pressed="${qrOn}">QR ${qrOn ? 'Kapat' : 'Aç'}</button>` : '',
             `<button class="btn primary" type="button" data-card-edit="${esc(c.id)}">Kart editöründe düzenle</button>`,
             c.market_return ? `<button class="btn" type="button" data-card-return="${esc(c.id)}" data-refund="${Number(c.market_return.refund_minor || 0)}">Market’e iade et · ${money(c.market_return.refund_minor)} FN</button>` : '',
             c.can_delete ? `<button class="btn danger" type="button" data-card-delete="${esc(c.id)}">Kartı sil</button>` : '',
@@ -64,6 +66,11 @@
     if(e.target.closest('[data-reload]')){paint();return;}
     const editCard=e.target.closest('[data-card-edit]'); if(editCard){try{const r=await req('POST','/api/editor/ticket',{card_id:editCard.dataset.cardEdit});location.href=r.url;}catch(err){root.FNXToast(err.message);}return;}
     if(e.target.closest('[data-card-new]')){try{const r=await req('POST','/api/editor/ticket',{label:'NEXUS'});location.href=r.url;}catch(err){root.FNXToast(err.message);}return;}
+    const qrCard=e.target.closest('[data-card-qr]'); if(qrCard){
+      const on=qrCard.dataset.qrNext==='on'; qrCard.disabled=true;
+      try{await C.setCardQr(qrCard.dataset.cardQr,on);root.FNXToast(on?'QR açıldı.':'QR kapatıldı.');await paint();}
+      catch(err){root.FNXToast(err.message);qrCard.disabled=false;} return;
+    }
     const returnCard=e.target.closest('[data-card-return]'); if(returnCard){
       const amount=money(Number(returnCard.dataset.refund||0));
       if(!confirm(`Bu Market kartını iade edip ${amount} FN anında geri almak istiyor musun? Kart arşivlenecek ve yeniden kullanılamayacak.`)) return;

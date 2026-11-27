@@ -207,6 +207,20 @@
     return searchQrSpot(design, function () { return { x: e.x, y: e.y }; }, e.scale, 1, 1);
   }
   // Çakışmayı gösteren kılavuz bölgeleri (editörde "korumalı alanlar" olarak çizilir; engel değil, rehberdir).
+  // Editör dışından (Kartlarım) QR aç/kapat: yalnızca QR alanları değişmiş bir kopya döner.
+  // Açarken yeri doluysa en yakın boş alana alınır; hiç yer yoksa null döner.
+  function withQr(design, on) {
+    var out = JSON.parse(JSON.stringify(design));
+    out.qrEnabled = !!on;
+    if (on) {
+      var norm = validateDesign(Object.assign({}, out, { qrEnabled: false })).design;
+      var spot = findQrSpot(norm);
+      if (!spot) return null;
+      if (spot.moved || spot.shrunk) { norm.sys.qr = spot.entry; out.sys = norm.sys; }
+    }
+    return out;
+  }
+
   function zonesOf(design) {
     var o = design.orientation, sys = design.sys || sysDefaults(o), q = design.qrStyle;
     return activeKeys(design.qrEnabled).map(function (k) {
@@ -372,7 +386,7 @@
     MAX_LAYERS: MAX_LAYERS, MAX_BG_COLORS: MAX_BG_COLORS, QR_STYLES: QR_STYLES,
     SYS_KEYS: SYS_KEYS, SYS: SYS, SYS_GROUPS: SYS_GROUPS, sysDefaults: sysDefaults, sysDims: sysDims, sysBox: sysBox,
     sysFix: sysFix, sysConflicts: sysConflicts, zonesOf: zonesOf,
-    QR_PLACES: QR_PLACES, placeQr: placeQr, findQrSpot: findQrSpot,
+    QR_PLACES: QR_PLACES, placeQr: placeQr, findQrSpot: findQrSpot, withQr: withQr,
     sanitizeName: sanitizeName, validateName: validateName, bbox: bbox, violation: violation,
     pushOut: pushOut, isLarge: isLarge, contrastRatio: ratio, validateDesign: validateDesign
   };

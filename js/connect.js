@@ -81,6 +81,25 @@
       return r.card.design;
     });
   }
+  // Kartlarım'dan QR aç/kapat: editörün kendi kayıt yolu kullanılır (bilet -> oturum -> PUT).
+  // Geçici oturum yereldedir; açık editör oturumunun jetonuna dokunmaz. Takılı yüzey korunur.
+  function setCardQr(cardId, on) {
+    var token = '';
+    return bankRequest('POST', '/api/editor/ticket', { card_id: cardId }).then(function (r) {
+      var m = /(?:^|[#&])t=([A-Za-z0-9_-]{20,80})/.exec(String(r && r.url || ''));
+      if (!m) throw new Error('Kart için düzenleme bileti alınamadı.');
+      return call('POST', '/api/editor/exchange', '', { ticket: m[1] });
+    }).then(function (d) {
+      token = d.token;
+      if (!d.card || String(d.card.id) !== String(cardId)) throw new Error('Sunucu farklı bir kart döndürdü; değişiklik yapılmadı.');
+      var next = root.FNXRules.withQr(d.card.design, on);
+      if (!next) throw new Error('QR için kartta boş alan yok. Kart editöründe yer aç.');
+      return call('PUT', '/api/editor/card', token, { design: next, skin_product_id: d.equipped_skin && d.equipped_skin.product_id || null });
+    }).then(function (r) {
+      if ((r.card.design.qrEnabled !== false) !== !!on) throw new Error('Sunucu QR ayarını saklamadı. Nexus sunucusundaki kart kuralları dosyası güncellenmeli.');
+      return r.card;
+    });
+  }
   function marketTicket(productId) {
     return call('POST', '/api/editor/shop-ticket', S.token, { product_id: productId || null }).then(function (r) { return r.url; });
   }
@@ -157,5 +176,5 @@
     if (!tok) return Promise.reject(new Error('Banka oturumu bulunamadı. Nexus hesabından yeniden açın.'));
     S.bankToken = tok; return bankCall(method, path, tok, body);
   }
-  root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, bankBoot: bankBoot, bankRequest: bankRequest, persist: persist, marketTicket: marketTicket, exit: exit, launchUrl: launchUrl, state: S };
+  root.FNXConnect = { enabled: !!NEXUS, nexusUrl: NEXUS, boot: boot, bankBoot: bankBoot, bankRequest: bankRequest, setCardQr: setCardQr, persist: persist, marketTicket: marketTicket, exit: exit, launchUrl: launchUrl, state: S };
 })(window);
